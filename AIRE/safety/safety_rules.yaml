@@ -1,0 +1,100 @@
+# AIRE Safety Rules
+# ──────────────────────────────────────────────────────────────────────────────
+# These rules govern what AIRE agents can and cannot recommend or execute.
+# Loaded at agent startup and enforced by action_validator.py.
+
+version: "1.0"
+last_updated: "2025-01-01"
+enforced_by: "action_validator.py"
+
+# ── Gemini Model Safety ────────────────────────────────────────────────────────
+gemini_safety:
+  standard:
+    HARM_CATEGORY_HARASSMENT: BLOCK_MEDIUM_AND_ABOVE
+    HARM_CATEGORY_HATE_SPEECH: BLOCK_MEDIUM_AND_ABOVE
+    HARM_CATEGORY_SEXUALLY_EXPLICIT: BLOCK_MEDIUM_AND_ABOVE
+    HARM_CATEGORY_DANGEROUS_CONTENT: BLOCK_MEDIUM_AND_ABOVE
+  strict:  # For agents with write access to production systems
+    HARM_CATEGORY_HARASSMENT: BLOCK_LOW_AND_ABOVE
+    HARM_CATEGORY_HATE_SPEECH: BLOCK_LOW_AND_ABOVE
+    HARM_CATEGORY_SEXUALLY_EXPLICIT: BLOCK_LOW_AND_ABOVE
+    HARM_CATEGORY_DANGEROUS_CONTENT: BLOCK_LOW_AND_ABOVE
+
+# ── Blocked Actions (hard-coded no-execute list) ───────────────────────────────
+blocked_actions:
+  - delete_production_database
+  - drop_table
+  - delete_production_agent
+  - disable_all_agents
+  - delete_all_logs
+  - terminate_all_sessions
+  - revoke_all_credentials
+  - bypass_safety_settings
+  - modify_safety_rules
+  - delete_audit_logs
+  - expose_api_keys
+  - disable_authentication
+  - execute_arbitrary_sql
+  - kubectl_delete_all
+
+# ── Actions Requiring Human Confirmation ──────────────────────────────────────
+confirmation_required:
+  - rotate_api_key
+  - update_agent_temperature
+  - trigger_pagerduty
+  - update_alert_threshold
+  - restart_cloud_run_service
+  - scale_down_instances
+  - update_max_tokens_limit
+  - clear_vector_store
+
+# ── Allowed Read Actions ───────────────────────────────────────────────────────
+allowed_read:
+  - retrieve_metrics
+  - fetch_traces
+  - query_logs
+  - list_agents
+  - get_agent_config
+  - search_knowledge_base
+  - calculate_cost
+  - simulate_optimization
+  - get_reliability_score
+  - list_recommendations
+
+# ── Allowed Write Actions (advisory recommendations only) ─────────────────────
+allowed_write_advisory:
+  - update_retrieval_chunk_count
+  - update_agent_temperature
+  - update_timeout_config
+  - add_retry_policy
+  - update_alert_threshold
+
+# ── Recommendation Guardrails ─────────────────────────────────────────────────
+recommendation_rules:
+  # Minimum confidence before surfacing a recommendation
+  min_confidence_threshold: 0.70
+
+  # Always cite data source
+  require_data_citation: true
+
+  # Cap projected improvement claims
+  max_projected_improvement_pct: 80
+
+  # Flag if recommendation conflicts with known safety rules
+  flag_destructive_recommendations: true
+
+  # Require human review for production-impacting recommendations
+  require_human_review_for_production_changes: true
+
+# ── Audit ─────────────────────────────────────────────────────────────────────
+audit:
+  # Log every agent action with these fields
+  required_fields:
+    - agent_id
+    - action_type
+    - resource
+    - timestamp
+    - user_id
+    - session_id
+  retention_days: 90
+  storage: "gcs-object-lock"  # immutable

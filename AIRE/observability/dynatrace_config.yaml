@@ -1,0 +1,96 @@
+# dynatrace_config.yaml
+# Dynatrace observability configuration for AIRE.
+# Controls which signals are collected and how they are tagged.
+
+dynatrace:
+  environment:
+    endpoint: "${DT_ENDPOINT}"          # e.g. https://abc12345.live.dynatrace.com
+    api_token: "${DT_API_TOKEN}"        # Permissions: metrics.read, traces.read, logs.read
+    otlp_endpoint: "${DT_OTLP_ENDPOINT}" # e.g. https://abc12345.live.dynatrace.com/api/v2/otlp
+
+  # ── Tagging ───────────────────────────────────────────────────────────────
+  tagging:
+    auto_tags:
+      - name: "aire-monitored"
+        rules:
+          - type: "SERVICE"
+            attribute: "SERVICE_NAME"
+            match: ".*-agent"
+
+  # ── Alerting ──────────────────────────────────────────────────────────────
+  metric_alerts:
+    - name: "High LLM Error Rate"
+      metric: "llm.error.count"
+      threshold: 10
+      window_minutes: 5
+      severity: "ERROR"
+      notify:
+        email: "${ALERT_EMAIL}"
+
+    - name: "P95 Latency Spike"
+      metric: "llm.call.latency"
+      aggregation: "percentile95"
+      threshold_ms: 5000
+      window_minutes: 5
+      severity: "PERFORMANCE"
+
+    - name: "Token Budget Exceeded"
+      metric: "llm.token.count"
+      threshold: 1000000   # 1M tokens per 5-min window
+      window_minutes: 5
+      severity: "INFO"
+
+  # ── Metric definitions ────────────────────────────────────────────────────
+  custom_metrics:
+    - key: "llm.token.count"
+      display_name: "LLM Token Usage"
+      unit: "Count"
+      description: "Total tokens consumed by LLM calls"
+      dimensions:
+        - "aire.agent"
+        - "llm.model"
+        - "token.type"
+
+    - key: "llm.call.latency"
+      display_name: "LLM Call Latency"
+      unit: "MilliSecond"
+      description: "End-to-end latency of LLM calls"
+      dimensions:
+        - "aire.agent"
+        - "llm.model"
+        - "llm.success"
+
+    - key: "llm.error.count"
+      display_name: "LLM Error Count"
+      unit: "Count"
+      description: "Number of failed LLM calls"
+      dimensions:
+        - "aire.agent"
+        - "llm.error"
+
+  # ── Dashboard ─────────────────────────────────────────────────────────────
+  dashboards:
+    - name: "AIRE Agent Observability"
+      tiles:
+        - type: "CUSTOM_CHARTING"
+          title: "Token Usage by Agent"
+          metric: "llm.token.count"
+          split_by: "aire.agent"
+          chart_type: "LINE"
+
+        - type: "CUSTOM_CHARTING"
+          title: "P95 Latency"
+          metric: "llm.call.latency"
+          aggregation: "percentile95"
+          chart_type: "LINE"
+
+        - type: "CUSTOM_CHARTING"
+          title: "Error Rate"
+          metric: "llm.error.count"
+          chart_type: "COLUMN"
+
+        - type: "MARKDOWN"
+          title: "AIRE — AI Reliability Engineer"
+          content: |
+            Monitor your AI agents with AIRE.
+            Metrics flow: Agent → OTel → Dynatrace → Bindplane → Gemini Agents → Dashboard.

@@ -1,0 +1,114 @@
+# otel_collector.yaml
+# OpenTelemetry Collector configuration.
+# Acts as the local collection agent on each node.
+# Exports to Bindplane which forwards to Dynatrace.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+        cors:
+          allowed_origins:
+            - "http://localhost:*"
+            - "https://*.run.app"
+
+  # Collect host metrics for correlation
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      memory: {}
+      disk: {}
+      network: {}
+
+processors:
+  # Batch for efficiency
+  batch:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
+
+  # Memory guard
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Add AIRE resource attributes
+  resource:
+    attributes:
+      - key: "aire.collector_version"
+        value: "1.0.0"
+        action: upsert
+      - key: "deployment.environment"
+        from_attribute: "ENVIRONMENT"
+        action: insert
+
+  # Filter out health check noise
+  filter:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["http.url"] == "/health"'
+        - 'attributes["http.url"] == "/metrics"'
+
+exporters:
+  # Primary: Bindplane (which routes to Dynatrace)
+  otlp/bindplane:
+    endpoint: "bindplane-server:4317"
+    tls:
+      insecure: false
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Fallback: direct to Dynatrace if Bindplane unavailable
+  otlphttp/dynatrace:
+    endpoint: "${DT_OTLP_ENDPOINT}"
+    headers:
+      Authorization: "Api-Token ${DT_API_TOKEN}"
+    retry_on_failure:
+      enabled: true
+
+  # Debug (disable in production)
+  logging:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+  pprof:
+    endpoint: "0.0.0.0:1777"
+  zpages:
+    endpoint: "0.0.0.0:55679"
+
+service:
+  extensions: [health_check, pprof, zpages]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, filter, batch]
+      exporters: [otlp/bindplane, otlphttp/dynatrace]
+
+    metrics:
+      receivers: [otlp, hostmetrics]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/bindplane, otlphttp/dynatrace]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/bindplane, otlphttp/dynatrace]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: "0.0.0.0:8888"

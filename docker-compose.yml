@@ -1,0 +1,142 @@
+version: "3.9"
+
+# AIRE — Local Development Docker Compose
+# Starts all services needed to run AIRE without connecting to GCP.
+# Uses mocked credentials for local dev.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f aire-backend
+
+services:
+
+  # ── AIRE Backend (FastAPI on Cloud Run locally) ───────────────────────────
+  aire-backend:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: aire-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCP_REGION=${GCP_REGION:-us-central1}
+      - VERTEX_AI_LOCATION=${VERTEX_AI_LOCATION:-us-central1}
+      - USE_SECRET_MANAGER=false
+      - DYNATRACE_ENVIRONMENT_ID=${DYNATRACE_ENVIRONMENT_ID}
+      - DYNATRACE_API_KEY=${DYNATRACE_API_KEY}
+      - BINDPLANE_ENDPOINT=${BINDPLANE_ENDPOINT}
+      - BINDPLANE_API_KEY=${BINDPLANE_API_KEY}
+      - OTEL_SERVICE_NAME=aire-backend
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./security/.env.example:/app/.env:ro
+      # Mount Google Application Default Credentials for local GCP access
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
+    depends_on:
+      - otel-collector
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - aire-net
+
+  # ── AIRE Dashboard (React Frontend) ──────────────────────────────────────
+  aire-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.dev
+    container_name: aire-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./dashboard/src:/app/src:ro
+    depends_on:
+      - aire-backend
+    networks:
+      - aire-net
+
+  # ── OpenTelemetry Collector ────────────────────────────────────────────────
+  # Receives OTel spans from demo apps, forwards to Dynatrace.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    ports:
+      - "4317:4317"   # gRPC OTLP
+      - "4318:4318"   # HTTP OTLP
+      - "8888:8888"   # Prometheus metrics (self)
+    volumes:
+      - ./telemetry_pipeline/otel_collector.yaml:/etc/otel-collector-config.yaml:ro
+    environment:
+      - DYNATRACE_ENVIRONMENT_ID=${DYNATRACE_ENVIRONMENT_ID}
+      - DYNATRACE_API_KEY=${DYNATRACE_API_KEY}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:13133/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - aire-net
+
+  # ── Demo AI App — Customer Support Agent ─────────────────────────────────
+  # Generates realistic telemetry for AIRE to analyze.
+  demo-customer-support:
+    build:
+      context: .
+      dockerfile: apps/Dockerfile.apps
+    container_name: demo-customer-support
+    command: ["python", "apps/customer_support_agent.py"]
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - OTEL_SERVICE_NAME=customer-support-agent
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - USE_SECRET_MANAGER=false
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+    networks:
+      - aire-net
+    profiles:
+      - demo  # Only start with: docker compose --profile demo up
+
+  # ── Demo AI App — Research Agent ─────────────────────────────────────────
+  demo-research:
+    build:
+      context: .
+      dockerfile: apps/Dockerfile.apps
+    container_name: demo-research-agent
+    command: ["python", "apps/research_agent.py"]
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - OTEL_SERVICE_NAME=research-agent
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - USE_SECRET_MANAGER=false
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+    networks:
+      - aire-net
+    profiles:
+      - demo
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  otel-data:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  aire-net:
+    driver: bridge
+    name: aire-network

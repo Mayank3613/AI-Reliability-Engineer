@@ -1,0 +1,113 @@
+# bindplane_config.yaml
+# Bindplane OP telemetry pipeline configuration for AIRE.
+# Collects from OTel Collector, transforms, normalizes, and routes
+# to Dynatrace and optionally Google Cloud Monitoring.
+#
+# Deploy via: bindplane apply -f bindplane_config.yaml
+
+apiVersion: bindplane.observiq.com/v1
+kind: Configuration
+metadata:
+  name: aire-telemetry-pipeline
+  labels:
+    app: aire
+    environment: production
+
+spec:
+  # ── Sources ────────────────────────────────────────────────────────────────
+  sources:
+    - name: otel-grpc
+      type: otlp
+      parameters:
+        - name: listen_address
+          value: "0.0.0.0:4317"
+        - name: listen_address_http
+          value: "0.0.0.0:4318"
+
+  # ── Processors ────────────────────────────────────────────────────────────
+  processors:
+    - name: aire-normalizer
+      type: resource_attribute_transformer
+      parameters:
+        - name: operations
+          value:
+            # Ensure all AIRE signals have the event_type attribute
+            - action: upsert
+              key: event_type
+              from_attribute: "span.kind"
+              pattern: ".*"
+
+            # Tag LLM tool calls
+            - action: upsert
+              key: event_type
+              value: "tool_call"
+              condition: 'attributes["llm.tool_name"] != nil'
+
+            # Tag error spans
+            - action: upsert
+              key: event_type
+              value: "llm_error"
+              condition: 'attributes["error"] == true'
+
+            # Normalize agent name
+            - action: upsert
+              key: aire.agent_normalized
+              from_attribute: "aire.agent"
+
+    - name: cost-tagger
+      type: metric_transform
+      parameters:
+        - name: transforms
+          value:
+            - include: "llm.token.count"
+              action: update
+              operations:
+                - action: add_label
+                  new_label: cost_tier
+                  new_value: "standard"
+                  condition: 'Label("llm.model") =~ "flash"'
+                - action: add_label
+                  new_label: cost_tier
+                  new_value: "premium"
+                  condition: 'Label("llm.model") =~ "pro"'
+
+    - name: sensitive-filter
+      type: filter
+      parameters:
+        - name: error_mode
+          value: ignore
+        - name: spans:
+          value:
+            # Drop spans containing PII (email, SSN patterns)
+            - 'attributes["ticket.text"] matches "\\b[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}\\b"'
+
+  # ── Destinations ──────────────────────────────────────────────────────────
+  destinations:
+    - name: dynatrace
+      type: dynatrace
+      parameters:
+        - name: endpoint
+          value: "${DT_OTLP_ENDPOINT}"
+        - name: api_token
+          value: "${DT_API_TOKEN}"
+        - name: send_traces
+          value: true
+        - name: send_metrics
+          value: true
+        - name: send_logs
+          value: true
+
+    - name: google-cloud-monitoring
+      type: googlecloud
+      parameters:
+        - name: project
+          value: "${GCP_PROJECT_ID}"
+        - name: sending_queue
+          value:
+            enabled: true
+            num_consumers: 4
+
+  # ── Pipeline ───────────────────────────────────────────────────────────────
+  selector:
+    matchLabels:
+      app: aire

@@ -1,0 +1,82 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aire-backend
+  labels:
+    app: aire
+    component: backend
+    managed-by: cloud-build
+  annotations:
+    run.googleapis.com/description: "AIRE — AI Agent Reliability Engineer Backend"
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scaling
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        # Startup probe
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      # Non-root service account with least-privilege
+      serviceAccountName: aire-backend@PROJECT_ID.iam.gserviceaccount.com
+
+      # Container concurrency (requests handled simultaneously per instance)
+      containerConcurrency: 80
+
+      # Request timeout
+      timeoutSeconds: 300
+
+      containers:
+        - name: aire-backend
+          image: gcr.io/PROJECT_ID/aire-backend:latest
+
+          ports:
+            - name: http1
+              containerPort: 8080
+
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: "0.5"
+              memory: 512Mi
+
+          env:
+            - name: GCP_PROJECT_ID
+              value: "PROJECT_ID"
+            - name: GCP_REGION
+              value: "us-central1"
+            - name: VERTEX_AI_LOCATION
+              value: "us-central1"
+            - name: USE_SECRET_MANAGER
+              value: "true"
+            - name: OTEL_SERVICE_NAME
+              value: "aire-backend"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+          # Liveness probe — restarts container if it fails
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+
+          # Startup probe — prevents traffic before app is ready
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+
+  # Traffic config: 100% to latest revision
+  traffic:
+    - percent: 100
+      latestRevision: true
