@@ -1,0 +1,138 @@
+# ==========================================
+
+# Environment Variables & Secrets
+
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+# Google Cloud Credentials
+
+service-account-key.json
+service-account*.json
+google-credentials.json
+gcloud-key.json
+credentials.json
+
+# Dynatrace
+
+dynatrace-token.txt
+
+# ==========================================
+
+# Python
+
+# ==========================================
+
+**pycache**/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+
+venv/
+.venv/
+env/
+ENV/
+
+# Build Artifacts
+
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Testing & Coverage
+
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Type Checkers
+
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# ==========================================
+
+# Logs
+
+# ==========================================
+
+logs/
+*.log
+
+# ==========================================
+
+# IDE / Editor
+
+# ==========================================
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==========================================
+
+# OS Files
+
+# ==========================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================================
+
+# Docker
+
+# ==========================================
+
+docker-compose.override.yml
+
+# ==========================================
+
+# Databases
+
+# ==========================================
+
+*.db
+*.sqlite
+*.sqlite3
+
+# ==========================================
+
+# Temporary Files
+
+# ==========================================
+
+tmp/
+temp/
+.cache/
+*.tmp
+
+# ==========================================
+
+# Jupyter
+
+# ==========================================
+
+.ipynb_checkpoints/
+
+# ==========================================
+
+# Misc
+
+# ==========================================
+
+*.bak
+*.old
+*.orig
