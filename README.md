@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛡️ AIRE — AI Reliability Engineer
+#  AIRE — AI Reliability Engineer
 
 ### *Diagnose failures. Optimise costs. Score reliability. Improve AI agents.*
 
@@ -109,9 +109,9 @@ graph TB
 
 ---
 
-## 🧠 The Four Gemini Agents
+## The Four Gemini Agents
 
-### 🟢 Reliability Analysis Agent
+### Reliability Analysis Agent
 
 - Ingests traces, latency histograms, and error rate time-series
 - Calculates a **composite Reliability Score (0–100)** weighted by success rate, P95 latency, error rate, and tool stability
@@ -130,7 +130,7 @@ graph TB
 
 ---
 
-### 🔴 Root Cause Agent
+### Root Cause Agent
 
 - Correlates failure spikes with specific tool calls, prompt patterns, or retrieval events
 - Identifies failure clusters: tool timeout, model error, context overflow, retry exhaustion
@@ -149,7 +149,7 @@ graph TB
 
 ---
 
-### 💰 Cost Optimisation Agent
+###  Cost Optimisation Agent
 
 - Analyses token usage per request: prompt, completion, retrieval chunk size
 - Identifies **speculative tool calls** — invoked every request but rarely needed
@@ -167,7 +167,7 @@ graph TB
 
 ---
 
-### ⭐ Recommendation Agent
+###  Recommendation Agent
 
 - Receives structured outputs from all three upstream agents
 - De-duplicates overlapping suggestions and ranks by expected reliability impact
@@ -187,7 +187,7 @@ graph TB
 
 ---
 
-## 📡 OTel Instrumentation Pattern
+##  OTel Instrumentation Pattern
 
 The key instrumentation that powers AIRE's analysis:
 
@@ -217,7 +217,7 @@ with tracer.start_as_current_span("agent.request") as parent:
 
 ---
 
-## 🏗️ Project Structure
+##  Project Structure
 
 ```
 AIRE/
@@ -308,29 +308,29 @@ AIRE/
 
 | | Resource | Purpose |
 |:---:|:---------|:--------|
-| 🧠 | **Gemini Enterprise Agent Platform** | Hosts all four specialist agents. Each agent receives normalised telemetry and returns structured analysis with cited evidence. |
-| 📚 | **Agent Search + Data Store** | Grounds recommendations in real content — playbooks, guides, runbooks. Prevents hallucinated advice. |
-| ⚡ | **Cloud Run** | Hosts Scoring Engine, Cost Analyser, Optimisation Calculator, and APIs. Serverless, scales to zero. |
-| 🔀 | **Bindplane — Google Edition** *(Free)* | Telemetry middleware. Collects, normalises, and routes OTel spans between Dynatrace and Gemini agents. |
-| 🔑 | **Secret Manager** | Stores Dynatrace API keys, Gemini credentials, and service tokens. Zero creds in source code. |
-| 🚀 | **Agent Runtime + Deployment** | Deploys AIRE as a live API endpoint and web app. Handles scaling and the dashboard data layer. |
-| 🛡️ | **Gemini Safety Settings** | Blocks suggestions that would delete data, disable monitoring, or take irreversible action. AIRE recommends; humans approve. |
+| I | **Gemini Enterprise Agent Platform** | Hosts all four specialist agents. Each agent receives normalised telemetry and returns structured analysis with cited evidence. |
+| II | **Agent Search + Data Store** | Grounds recommendations in real content — playbooks, guides, runbooks. Prevents hallucinated advice. |
+| III | **Cloud Run** | Hosts Scoring Engine, Cost Analyser, Optimisation Calculator, and APIs. Serverless, scales to zero. |
+| IV | **Bindplane — Google Edition** *(Free)* | Telemetry middleware. Collects, normalises, and routes OTel spans between Dynatrace and Gemini agents. |
+| V | **Secret Manager** | Stores Dynatrace API keys, Gemini credentials, and service tokens. Zero creds in source code. |
+| VI | **Agent Runtime + Deployment** | Deploys AIRE as a live API endpoint and web app. Handles scaling and the dashboard data layer. |
+| VII | **Gemini Safety Settings** | Blocks suggestions that would delete data, disable monitoring, or take irreversible action. AIRE recommends; humans approve. |
 
 ### Dynatrace Track
 
 | | Resource | Purpose |
 |:---:|:---------|:--------|
-| 📡 | **AI Agent Platform Observability** | Primary data source. Captures the complete prompt → model → tool → response chain for every interaction. |
-| 📊 | **Gemini Enterprise Monitoring** | Native Gemini integration. Per-model token spend, generation latency, error rates, prompt flow visualisation. |
-| 💻 | **Coding Agent Monitoring** | Additional dimensions for coding assistants: file-level context size, retrieval chunks, code-specific tracing. |
-| 🔀 | **Bindplane OTel Pipeline** *(Free)* | Collects all OTel spans, normalises into AIRE's schema, routes to Dynatrace dashboards and Gemini agents. |
-| 📖 | **Code Examples Repo** | OTel instrumentation configs. Python OTel SDK setup and OTLP exporter config for Day 1 bootstrapping. |
+| I | **AI Agent Platform Observability** | Primary data source. Captures the complete prompt → model → tool → response chain for every interaction. |
+| II | **Gemini Enterprise Monitoring** | Native Gemini integration. Per-model token spend, generation latency, error rates, prompt flow visualisation. |
+| III | **Coding Agent Monitoring** | Additional dimensions for coding assistants: file-level context size, retrieval chunks, code-specific tracing. |
+| IV | **Bindplane OTel Pipeline** *(Free)* | Collects all OTel spans, normalises into AIRE's schema, routes to Dynatrace dashboards and Gemini agents. |
+| V | **Code Examples Repo** | OTel instrumentation configs. Python OTel SDK setup and OTLP exporter config for Day 1 bootstrapping. |
 
 > **Design Decision**: Agent Conversation is used for the AIRE chat interface. Agent Builder (low-code) is skipped in favour of the Python SDK for full orchestration control.
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 
@@ -377,7 +377,7 @@ export GCP_PROJECT_ID=your-project-id
 
 ---
 
-## 📡 API Reference
+##  API Reference
 
 | Method | Endpoint | Description |
 |:------:|:---------|:------------|
@@ -437,7 +437,7 @@ Full interactive docs at: `http://localhost:8080/docs`
 
 ---
 
-## 🧪 Running Tests
+##  Running Tests
 
 ```bash
 # Unit tests only
@@ -452,7 +452,7 @@ pytest AIRE/tests/ -v --cov=AIRE --cov-report=html
 
 ---
 
-## 🎬 Live Demo Script
+##  Live Demo Script
 
 > *For hackathon judges — a 5-minute walkthrough.*
 
@@ -465,11 +465,11 @@ pytest AIRE/tests/ -v --cov=AIRE --cov-report=html
 | **5** | Show RAG grounding | Click Recommendation Agent trace → see it query the internal playbook → source citation: *"ShopFast Reliability Guide v3, §4.2"* |
 | **6** | Show simulation | Optimisation Calculator result: **Before** 31% failure, 8.4s latency, $2,100/day → **After** 4% failure, 2.1s latency, $460/day. **Score: 69 → 93**. |
 
-> 🎯 **Key line**: *"Every token spent and every failure is traceable to a specific agent decision."*
+>  **Key line**: *"Every token spent and every failure is traceable to a specific agent decision."*
 
 ---
 
-## 📄 License
+##  License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
