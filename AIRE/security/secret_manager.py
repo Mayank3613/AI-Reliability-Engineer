@@ -9,11 +9,17 @@ from functools import lru_cache
 from typing import Optional
 
 from google.cloud import secretmanager
-from google.api_core.exceptions import NotFound, PermissionDenied
+from google.api_core.exceptions import AlreadyExists, NotFound, PermissionDenied
 
 PROJECT_ID = os.environ.get("GCP_PROJECT_ID")
 
 _client: Optional[secretmanager.SecretManagerServiceClient] = None
+
+
+def _require_project_id() -> str:
+    if not PROJECT_ID:
+        raise EnvironmentError("GCP_PROJECT_ID must be set to use Secret Manager")
+    return PROJECT_ID
 
 
 def _get_client() -> secretmanager.SecretManagerServiceClient:
@@ -38,14 +44,15 @@ def get_secret(secret_id: str, version: str = "latest") -> str:
         ValueError if the secret is not found or access is denied.
     """
     client = _get_client()
-    name = f"projects/{PROJECT_ID}/secrets/{secret_id}/versions/{version}"
+    project_id = _require_project_id()
+    name = f"projects/{project_id}/secrets/{secret_id}/versions/{version}"
 
     try:
         response = client.access_secret_version(request={"name": name})
         payload = response.payload.data.decode("utf-8").strip()
         return payload
     except NotFound:
-        raise ValueError(f"[SecretManager] Secret '{secret_id}' not found in project '{PROJECT_ID}'")
+        raise ValueError(f"[SecretManager] Secret '{secret_id}' not found in project '{project_id}'")
     except PermissionDenied:
         raise ValueError(
             f"[SecretManager] Access denied for secret '{secret_id}'. "
@@ -61,7 +68,8 @@ def create_secret(secret_id: str, value: str, labels: dict = None) -> str:
     Returns the resource name of the created secret version.
     """
     client = _get_client()
-    parent = f"projects/{PROJECT_ID}"
+    project_id = _require_project_id()
+    parent = f"projects/{project_id}"
 
     try:
         secret = client.create_secret(
@@ -74,9 +82,9 @@ def create_secret(secret_id: str, value: str, labels: dict = None) -> str:
                 },
             }
         )
-    except Exception:
+    except AlreadyExists:
         # Secret already exists — add a new version
-        secret_name = f"projects/{PROJECT_ID}/secrets/{secret_id}"
+        secret_name = f"projects/{project_id}/secrets/{secret_id}"
         version = client.add_secret_version(
             request={
                 "parent": secret_name,
@@ -99,7 +107,8 @@ def create_secret(secret_id: str, value: str, labels: dict = None) -> str:
 def rotate_secret(secret_id: str, new_value: str) -> str:
     """Add a new version to an existing secret (rotation)."""
     client = _get_client()
-    secret_name = f"projects/{PROJECT_ID}/secrets/{secret_id}"
+    project_id = _require_project_id()
+    secret_name = f"projects/{project_id}/secrets/{secret_id}"
     version = client.add_secret_version(
         request={
             "parent": secret_name,
@@ -113,7 +122,8 @@ def rotate_secret(secret_id: str, new_value: str) -> str:
 def list_secrets(filter_prefix: str = "aire-") -> list[str]:
     """List all secrets in the project matching a prefix."""
     client = _get_client()
-    parent = f"projects/{PROJECT_ID}"
+    project_id = _require_project_id()
+    parent = f"projects/{project_id}"
     secrets = []
     for secret in client.list_secrets(request={"parent": parent}):
         name = secret.name.split("/")[-1]

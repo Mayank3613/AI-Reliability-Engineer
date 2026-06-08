@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "AIRE — AI Agent Reliability Engineer powered by Dynatrace + Gemini on Google Cloud"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = { text = "MIT" }
 keywords = ["ai", "reliability", "observability", "gemini", "dynatrace", "google-cloud"]
 authors = [{ name = "AIRE Team" }]
 

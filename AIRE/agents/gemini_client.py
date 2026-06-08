@@ -86,8 +86,15 @@ class GeminiClient:
                 response = self.model.generate_content(full_prompt)
                 latency_ms = (time.monotonic() - start) * 1000
 
-                tokens = response.usage_metadata
-                used = (tokens.prompt_token_count or 0) + (tokens.candidates_token_count or 0)
+                usage = getattr(response, "usage_metadata", None) or {}
+                if isinstance(usage, dict):
+                    prompt_count = usage.get("prompt_token_count", 0) or usage.get("prompt_tokens", 0) or 0
+                    candidate_count = usage.get("candidates_token_count", 0) or usage.get("completion_token_count", 0) or 0
+                else:
+                    prompt_count = getattr(usage, "prompt_token_count", None) or getattr(usage, "prompt_tokens", None) or 0
+                    candidate_count = getattr(usage, "candidates_token_count", None) or getattr(usage, "completion_token_count", None) or 0
+
+                used = int(prompt_count) + int(candidate_count)
                 self._total_tokens += used
                 self._total_calls += 1
 
@@ -147,6 +154,9 @@ class GeminiClient:
         Multi-turn chat interface.
         messages = [{"role": "user"|"model", "parts": [str]}]
         """
+        if not messages:
+            raise ValueError("Chat messages list must contain at least one message.")
+
         history = [
             genai.types.ContentDict(role=m["role"], parts=[m["parts"]])
             for m in messages[:-1]

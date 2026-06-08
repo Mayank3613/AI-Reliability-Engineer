@@ -24,8 +24,16 @@ class DynatraceClient:
         endpoint: str | None = None,
         api_token: str | None = None,
     ):
-        self.endpoint = (endpoint or os.environ["DT_ENDPOINT"]).rstrip("/")
-        self.api_token = api_token or os.environ["DT_API_TOKEN"]
+        endpoint = endpoint or os.environ.get("DT_ENDPOINT")
+        api_token = api_token or os.environ.get("DT_API_TOKEN")
+
+        if not endpoint:
+            raise EnvironmentError("DT_ENDPOINT must be set for Dynatrace API access")
+        if not api_token:
+            raise EnvironmentError("DT_API_TOKEN must be set for Dynatrace API access")
+
+        self.endpoint = endpoint.rstrip("/")
+        self.api_token = api_token
         self.session = requests.Session()
         self.session.headers.update(
             {
