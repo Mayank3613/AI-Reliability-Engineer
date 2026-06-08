@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🛡️ AIRE — AI Reliability Engineer
 
@@ -9,15 +9,16 @@
 [![Gemini](https://img.shields.io/badge/Gemini-Enterprise%20Agents-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://cloud.google.com/gemini)
 [![License](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
 
-<br/>
+<br>
 
-> **AIRE uses Dynatrace observability data and Gemini reasoning to automatically diagnose failures,<br/>optimise costs, score reliability, and improve the performance of enterprise AI agents —<br/>with every recommendation grounded in your internal playbooks and quantified before it ships.**
+> **AIRE uses Dynatrace observability data and Gemini reasoning to automatically diagnose failures, optimise costs, score reliability, and improve the performance of enterprise AI agents — with every recommendation grounded in your internal playbooks and quantified before it ships.**
 
-<br/>
+<br>
 
 | 69 → 93 | 67% | −38% | $1,640/day |
 |:---:|:---:|:---:|:---:|
-| Reliability Score<br/>before → after fix | Failures traced to<br/>root cause | Token reduction<br/>from optimisation | Simulated daily<br/>cost savings |
+| Reliability Score | Failures traced to | Token reduction | Simulated daily |
+| before → after fix | root cause | from optimisation | cost savings |
 
 </div>
 
@@ -27,38 +28,38 @@
 
 ```mermaid
 graph TB
-    subgraph AI["🤖 Enterprise AI Applications"]
-        A1["Support Bot<br/>customer queries"]
-        A2["Coding Agent<br/>code review & assist"]
-        A3["Research Agent<br/>RAG & knowledge"]
-        A4["Ops Agent<br/>internal workflows"]
+    subgraph AI["Enterprise AI Applications"]
+        A1["Support Bot"]
+        A2["Coding Agent"]
+        A3["Research Agent"]
+        A4["Ops Agent"]
     end
 
-    subgraph DT["📡 Dynatrace Observability"]
-        D1["Prompt Flows · Agent Traces · Tool Calls<br/>Token Usage · Latency · Errors"]
+    subgraph DT["Dynatrace Observability"]
+        D1["Prompt Flows - Agent Traces - Tool Calls - Token Usage - Latency - Errors"]
     end
 
-    subgraph BP["🔀 Bindplane Telemetry Pipeline"]
-        B1["Collect → Transform → Normalise → Route"]
+    subgraph BP["Bindplane Telemetry Pipeline"]
+        B1["Collect - Transform - Normalise - Route"]
     end
 
-    subgraph AGENTS["🧠 Gemini Enterprise Agent Platform"]
-        G1["Reliability Agent<br/>scores overall health"]
-        G2["Root Cause Agent<br/>traces failure source"]
-        G3["Cost Agent<br/>token & latency waste"]
-        G4["Recommendation Agent<br/>top-3 actionable fixes"]
+    subgraph AGENTS["Gemini Enterprise Agent Platform"]
+        G1["Reliability Agent"]
+        G2["Root Cause Agent"]
+        G3["Cost Agent"]
+        G4["Recommendation Agent"]
     end
 
-    subgraph RAG["📚 Agent Search — RAG"]
-        R1["Reliability Playbooks · Prompt Guides · SOPs"]
+    subgraph RAG["Agent Search - RAG"]
+        R1["Reliability Playbooks - Prompt Guides - SOPs"]
     end
 
-    subgraph BACKEND["⚡ Cloud Run Backend"]
-        S1["Scoring Engine · Cost Analyser<br/>Optimisation Calculator · APIs"]
+    subgraph BACKEND["Cloud Run Backend"]
+        S1["Scoring Engine - Cost Analyser - Optimisation Calculator - APIs"]
     end
 
-    DASH["📊 AIRE Dashboard"]
-    SEC["🔑 Secret Manager"]
+    DASH["AIRE Dashboard"]
+    SEC["Secret Manager"]
 
     AI -->|"OTel spans"| DT
     DT --> BP
@@ -110,10 +111,6 @@ graph TB
 
 ## 🧠 The Four Gemini Agents
 
-<table>
-<tr>
-<td width="50%">
-
 ### 🟢 Reliability Analysis Agent
 
 - Ingests traces, latency histograms, and error rate time-series
@@ -131,8 +128,7 @@ graph TB
 }
 ```
 
-</td>
-<td width="50%">
+---
 
 ### 🔴 Root Cause Agent
 
@@ -151,10 +147,7 @@ graph TB
 }
 ```
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+---
 
 ### 💰 Cost Optimisation Agent
 
@@ -168,12 +161,11 @@ graph TB
 {
   "waste_tokens_pct": 38,
   "est_daily_saving": "$1,640",
-  "top_fix": "reduce retrieval k from 12 → 3"
+  "top_fix": "reduce retrieval k from 12 to 3"
 }
 ```
 
-</td>
-<td width="50%">
+---
 
 ### ⭐ Recommendation Agent
 
@@ -192,10 +184,6 @@ graph TB
   ]
 }
 ```
-
-</td>
-</tr>
-</table>
 
 ---
 
@@ -219,7 +207,7 @@ with tracer.start_as_current_span("agent.request") as parent:
         tool_span.set_attribute("tool.name", "shipping_api")
         tool_span.set_attribute("tool.latency_ms", elapsed_ms)
         tool_span.set_attribute("tool.status", status)           # "success" | "timeout" | "error"
-        tool_span.set_attribute("tool.was_speculative", True)    # 🔑 key signal for Cost Agent
+        tool_span.set_attribute("tool.was_speculative", True)    # key signal for Cost Agent
         tool_span.set_attribute("tool.retry_count", retries)
 
     # Bindplane collects all spans — no Dynatrace SDK needed in this file
@@ -233,21 +221,21 @@ with tracer.start_as_current_span("agent.request") as parent:
 
 ```
 AIRE/
-├── Apps/                           # 🤖 Demo AI Applications
+├── Apps/                           # Demo AI Applications
 │   ├── customer_support_agent.py   #    Support bot with planted failures
 │   ├── coding_agent.py             #    Code review assistant
 │   ├── research_agent.py           #    RAG-powered research agent
 │   ├── enterprise_agent.py         #    Internal ops automation
 │   └── otel_setup.py               #    Shared OTel instrumentation config
 │
-├── observability/                  # 📡 Dynatrace Integration Layer
+├── observability/                  # Dynatrace Integration Layer
 │   ├── dynatrace_client.py         #    API client for Dynatrace
 │   ├── otel_exporter.py            #    OTLP exporter configuration
 │   ├── trace_collector.py          #    Trace collection & processing
 │   ├── metric_collector.py         #    Metric aggregation
 │   └── dynatrace_config.yaml       #    Dynatrace environment config
 │
-├── agents/                         # 🧠 Gemini Enterprise Agent Platform
+├── agents/                         # Gemini Enterprise Agent Platform
 │   ├── reliability_agent.py        #    Reliability scoring agent
 │   ├── root_cause_agent.py         #    Root cause analysis agent
 │   ├── cost_agent.py               #    Cost optimisation agent
@@ -255,7 +243,7 @@ AIRE/
 │   ├── agent_orchestrator.py       #    Parallel agent dispatch
 │   └── gemini_client.py            #    Gemini API client wrapper
 │
-├── knowledge/                      # 📚 Agent Search + RAG Pipeline
+├── knowledge/                      # Agent Search + RAG Pipeline
 │   ├── agent_search.py             #    Discovery Engine search client
 │   ├── datastore_client.py         #    Data store management
 │   ├── rag_pipeline.py             #    Full RAG pipeline orchestration
@@ -266,7 +254,7 @@ AIRE/
 │       ├── prompt_engineering_guide.md
 │       └── ai_best_practices.md
 │
-├── services/                       # ⚡ Cloud Run Backend Services
+├── services/                       # Cloud Run Backend Services
 │   ├── main.py                     #    FastAPI application entry point
 │   ├── reliability_scorer.py       #    Weighted reliability scoring engine
 │   ├── cost_analyzer.py            #    Cost analysis & projections
@@ -274,24 +262,24 @@ AIRE/
 │   ├── recommendation_api.py       #    Recommendation formatting API
 │   └── Dockerfile                  #    Container image definition
 │
-├── security/                       # 🔑 Secret Manager Integration
+├── security/                       # Secret Manager Integration
 │   ├── secret_manager.py           #    GCP Secret Manager client
 │   ├── credentials.py              #    Credential resolution logic
 │   └── .env.example                #    Environment variable template
 │
-├── safety/                         # 🛡️ Gemini Safety Controls
+├── safety/                         # Gemini Safety Controls
 │   ├── safety_config.py            #    Safety filter configuration
 │   ├── safety_rules.yaml           #    Rule definitions
 │   └── action_validator.py         #    Action validation before execution
 │
-├── deploy/                         # 🚀 Deployment Configuration
+├── deploy/                         # Deployment Configuration
 │   ├── deploy.sh                   #    One-command deployment script
 │   ├── cloudbuild.yaml             #    CI/CD pipeline
 │   ├── cloud_run_service.yaml      #    Cloud Run service definition
 │   ├── k8s_deployment.yaml         #    Kubernetes deployment (optional)
 │   └── agent_runtime.py            #    Agent execution runtime
 │
-├── dashboard/                      # 📊 React Frontend (Vite)
+├── dashboard/                      # React Frontend (Vite)
 │   └── src/
 │       ├── components/
 │       │   ├── Dashboard.jsx       #    Main dashboard layout
@@ -304,9 +292,9 @@ AIRE/
 │       ├── style.css               #    Global styles
 │       └── main.jsx                #    Entry point
 │
-├── telemetry_pipeline/             # 🔀 Bindplane Pipeline Config
-├── tests/                          # ✅ Unit & Integration Tests
-├── scripts/                        # 🛠️ Development Utilities
+├── telemetry_pipeline/             # Bindplane Pipeline Config
+├── tests/                          # Unit & Integration Tests
+├── scripts/                        # Development Utilities
 ├── docker-compose.yml              #    Full local stack
 ├── requirements.txt                #    Python dependencies
 └── pyproject.toml                  #    Project metadata
@@ -318,8 +306,8 @@ AIRE/
 
 ### Google Cloud Platform
 
-| Icon | Resource | Purpose |
-|:----:|:---------|:--------|
+| | Resource | Purpose |
+|:---:|:---------|:--------|
 | 🧠 | **Gemini Enterprise Agent Platform** | Hosts all four specialist agents. Each agent receives normalised telemetry and returns structured analysis with cited evidence. |
 | 📚 | **Agent Search + Data Store** | Grounds recommendations in real content — playbooks, guides, runbooks. Prevents hallucinated advice. |
 | ⚡ | **Cloud Run** | Hosts Scoring Engine, Cost Analyser, Optimisation Calculator, and APIs. Serverless, scales to zero. |
@@ -330,8 +318,8 @@ AIRE/
 
 ### Dynatrace Track
 
-| Icon | Resource | Purpose |
-|:----:|:---------|:--------|
+| | Resource | Purpose |
+|:---:|:---------|:--------|
 | 📡 | **AI Agent Platform Observability** | Primary data source. Captures the complete prompt → model → tool → response chain for every interaction. |
 | 📊 | **Gemini Enterprise Monitoring** | Native Gemini integration. Per-model token spend, generation latency, error rates, prompt flow visualisation. |
 | 💻 | **Coding Agent Monitoring** | Additional dimensions for coding assistants: file-level context size, retrieval chunks, code-specific tracing. |
@@ -355,7 +343,7 @@ AIRE/
 
 ```bash
 # 1 · Clone and configure
-git clone https://github.com/your-org/AIRE.git
+git clone https://github.com/Mayank3613/SevenEyes.git
 cd AIRE
 cp .env.example .env
 # Fill in GCP_PROJECT_ID, DYNATRACE_*, GEMINI_API_KEY values
@@ -496,4 +484,3 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 Built for the Dynatrace + Google Cloud Hackathon
 
 </div>
-]]>
