@@ -1,75 +1,136 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ReliabilityScore from './ReliabilityScore';
 import RootCausePanel from './RootCausePanel';
 import CostInsights from './CostInsights';
 import AgentComparison from './AgentComparison';
 import Recommendations from './Recommendations';
 
-const overviewCards = [
-  { label: 'Active agents', value: '4', detail: 'Telemetry live' },
-  { label: 'Average reliability', value: '87%', detail: 'Up 6% from last hour' },
-  { label: 'Cost forecast', value: '$18.6k', detail: 'Projected monthly spend' },
-  { label: 'Open incidents', value: '2', detail: 'Critical root causes' },
-];
-
-const reliability = {
-  score: 88,
-  grade: 'B+',
-  trend: '+6%',
-  risk: 'LOW',
-  summary:
-    'All agents remain stable with strong success rates. A few latency spikes from upstream tool calls are being monitored.',
-};
-
-const causes = [
-  {
-    title: 'Tool call latency spikes',
-    detail: 'Search and ticket lookup API calls are introducing variability under peak load.',
-    severity: 'Medium',
-  },
-  {
-    title: 'Inconsistent model prompts',
-    detail: 'Some agent contexts lack structured tool instructions, causing response drift.',
-    severity: 'Low',
-  },
-  {
-    title: 'Retry storm from timeout handling',
-    detail: 'Agents are issuing repeated retries for transient failures instead of backoff.',
-    severity: 'High',
-  },
-];
-
-const costMetrics = [
-  { label: 'Current spend', value: '$6,780', progress: 72, color: '#5ba4f7' },
-  { label: 'Model optimization', value: '$4,120', progress: 46, color: '#36d6b3' },
-  { label: 'Potential savings', value: '$3,100', progress: 28, color: '#ffb020' },
-];
-
-const agents = [
-  { name: 'customer-support-agent', score: 92, health: 'Excellent', spend: '$3,120' },
-  { name: 'coding-agent', score: 86, health: 'Good', spend: '$2,280' },
-  { name: 'research-agent', score: 81, health: 'Fair', spend: '$4,180' },
-  { name: 'enterprise-agent', score: 81, health: 'Fair', spend: '$3,110' },
-];
-
-const recommendations = [
-  {
-    title: 'Shift next-gen requests to flash model tier',
-    tag: 'Cost',
-  },
-  {
-    title: 'Add adaptive backoff for retry loops',
-    tag: 'Reliability',
-  },
-  {
-    title: 'Standardize tool prompt templates',
-    tag: 'Quality',
-  },
-];
-
 export default function Dashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchData = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/dashboard/data');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const json = await response.json();
+      setData(json);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err);
+      setError('Connection to AIRE backend failed. Retrying...');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 8000); // poll every 8 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading && !data) {
+    return (
+      <div className="loading-container">
+        <div className="loader"></div>
+        <p>Connecting to AIRE telemetry backend...</p>
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="error-container">
+        <div className="loader" style={{ animation: 'none', borderTopColor: 'var(--danger)' }}></div>
+        <h2>Connection Failed</h2>
+        <p>{error}</p>
+        <button onClick={() => { setLoading(true); fetchData(); }} className="action-btn" style={{ marginTop: '16px' }}>
+          Retry Connection
+        </button>
+      </div>
+    );
+  }
+
+  // Use state variables from backend response
+  const { overviewCards, reliability, recommendations, causes, costMetrics, agents } = data;
+
   return (
     <div className="dashboard-layout">
+      {/* Premium Gemini-style Navigation */}
+      <header className="navbar" style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0 0 24px 0',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+        marginBottom: '40px'
+      }}>
+        <div className="nav-brand" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div className="brand-logo" style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '50%',
+            background: 'var(--gemini-gradient)',
+            boxShadow: '0 0 15px rgba(139, 92, 246, 0.4)'
+          }}></div>
+          <span style={{
+            fontFamily: 'Outfit, sans-serif',
+            fontWeight: 800,
+            fontSize: '1.35rem',
+            letterSpacing: '-0.03em',
+            background: 'linear-gradient(90deg, #fff, #c084fc)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent'
+          }}>AIRE</span>
+        </div>
+        <div className="nav-status" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '0.8rem',
+          color: '#34d399',
+          background: 'rgba(16, 185, 129, 0.06)',
+          border: '1px solid rgba(16, 185, 129, 0.2)',
+          padding: '6px 14px',
+          borderRadius: '100px',
+          fontWeight: 600
+        }}>
+          <span className="pulse-dot" style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: '#10b981',
+            boxShadow: '0 0 8px #10b981'
+          }}></span>
+          Telemetry Live
+        </div>
+      </header>
+
+      {error && (
+        <div style={{
+          background: 'rgba(255, 107, 107, 0.15)',
+          border: '1px solid var(--danger)',
+          padding: '12px 24px',
+          borderRadius: '12px',
+          marginBottom: '24px',
+          color: '#fb7185',
+          fontSize: '0.9rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <span>⚠️ {error}</span>
+          <button onClick={fetchData} className="action-btn secondary" style={{ padding: '4px 10px', fontSize: '0.8rem' }}>Reconnect</button>
+        </div>
+      )}
       <div className="dashboard-header">
         <div className="hero">
           <p className="badge">AIRE Control Center</p>
@@ -81,7 +142,7 @@ export default function Dashboard() {
         </div>
         <div className="metric-grid">
           {overviewCards.map((card) => (
-            <div key={card.label} className="metric-card">
+            <div key={card.label} className="metric-card interactive-card" onClick={fetchData}>
               <span>{card.label}</span>
               <strong>{card.value}</strong>
               <p>{card.detail}</p>

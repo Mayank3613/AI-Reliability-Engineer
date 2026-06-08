@@ -1,6 +1,10 @@
 import React from 'react';
 
 export default function AgentComparison({ agents }) {
+  const handleRowClick = (agentName) => {
+    alert(`Loading detailed metrics for ${agentName}...`);
+  };
+
   return (
     <section className="section-card agent-comparison">
       <div className="card-title">
@@ -17,7 +21,11 @@ export default function AgentComparison({ agents }) {
         </thead>
         <tbody>
           {agents.map((agent) => (
-            <tr key={agent.name}>
+            <tr 
+              key={agent.name} 
+              className="interactive-row"
+              onClick={() => handleRowClick(agent.name)}
+            >
               <td>
                 <strong>{agent.name}</strong>
                 <span className="small-text">{agent.health}</span>

@@ -105,10 +105,12 @@ def record_llm_call(
         unit="1",
     )
 
+    scope = getattr(tracer, "instrumentation_scope", getattr(tracer, "_instrumentation_scope", None))
+    agent_name = scope.name if scope else "unknown"
     attrs = {
         "llm.model": model,
         "llm.success": str(success),
-        "aire.agent": tracer.instrumentation_scope.name,
+        "aire.agent": agent_name,
     }
     if tool_name:
         attrs["llm.tool_name"] = tool_name

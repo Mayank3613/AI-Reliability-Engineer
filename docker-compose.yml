@@ -14,7 +14,7 @@ services:
   aire-backend:
     build:
       context: .
-      dockerfile: services/Dockerfile
+      dockerfile: AIRE/services/Dockerfile
     container_name: aire-backend
     ports:
       - "8080:8080"
@@ -31,8 +31,9 @@ services:
       - OTEL_SERVICE_NAME=aire-backend
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/AIRE:/app/AIRE/agents:/app/AIRE/observability:/app/AIRE/security:/app/AIRE/safety
     volumes:
-      - ./security/.env.example:/app/.env:ro
+      - ./.env:/app/.env:ro
       # Mount Google Application Default Credentials for local GCP access
       - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
     depends_on:
@@ -50,7 +51,7 @@ services:
   # ── AIRE Dashboard (React Frontend) ──────────────────────────────────────
   aire-dashboard:
     build:
-      context: ./dashboard
+      context: ./AIRE/dashboard
       dockerfile: Dockerfile.dev
     container_name: aire-dashboard
     ports:
@@ -59,7 +60,7 @@ services:
       - REACT_APP_API_URL=http://localhost:8080
       - CHOKIDAR_USEPOLLING=true
     volumes:
-      - ./dashboard/src:/app/src:ro
+      - ./AIRE/dashboard/src:/app/src:ro
     depends_on:
       - aire-backend
     networks:
@@ -80,6 +81,9 @@ services:
     environment:
       - DYNATRACE_ENVIRONMENT_ID=${DYNATRACE_ENVIRONMENT_ID}
       - DYNATRACE_API_KEY=${DYNATRACE_API_KEY}
+      - DT_OTLP_ENDPOINT=${DT_OTLP_ENDPOINT}
+      - DT_API_TOKEN=${DT_API_TOKEN}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:13133/"]
       interval: 30s
@@ -94,9 +98,9 @@ services:
   demo-customer-support:
     build:
       context: .
-      dockerfile: apps/Dockerfile.apps
+      dockerfile: AIRE/Apps/Dockerfile.apps
     container_name: demo-customer-support
-    command: ["python", "apps/customer_support_agent.py"]
+    command: ["python", "AIRE/Apps/customer_support_agent.py"]
     environment:
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - OTEL_SERVICE_NAME=customer-support-agent
@@ -104,6 +108,8 @@ services:
       - USE_SECRET_MANAGER=false
     depends_on:
       - otel-collector
+    volumes:
+      - ./.env:/app/.env:ro
     restart: unless-stopped
     networks:
       - aire-net
@@ -114,9 +120,9 @@ services:
   demo-research:
     build:
       context: .
-      dockerfile: apps/Dockerfile.apps
+      dockerfile: AIRE/Apps/Dockerfile.apps
     container_name: demo-research-agent
-    command: ["python", "apps/research_agent.py"]
+    command: ["python", "AIRE/Apps/research_agent.py"]
     environment:
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - OTEL_SERVICE_NAME=research-agent
@@ -124,6 +130,8 @@ services:
       - USE_SECRET_MANAGER=false
     depends_on:
       - otel-collector
+    volumes:
+      - ./.env:/app/.env:ro
     restart: unless-stopped
     networks:
       - aire-net

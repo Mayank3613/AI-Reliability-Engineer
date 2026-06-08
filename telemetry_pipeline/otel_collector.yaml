@@ -76,10 +76,8 @@ exporters:
       enabled: true
 
   # Debug (disable in production)
-  logging:
+  debug:
     verbosity: detailed
-    sampling_initial: 5
-    sampling_thereafter: 200
 
 extensions:
   health_check:
@@ -110,5 +108,3 @@ service:
   telemetry:
     logs:
       level: info
-    metrics:
-      address: "0.0.0.0:8888"

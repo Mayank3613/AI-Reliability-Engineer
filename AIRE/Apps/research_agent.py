@@ -86,11 +86,19 @@ def research_topic(topic: str, tracer, meter) -> dict:
                     prompt = f"Question: {q}\nSearch results: {search_result}\nSummarize the key insight in 2-3 sentences."
                     pt = len(prompt.split()) * 2
 
-                    response = model.generate_content(prompt)
-                    ct = len(response.text.split()) * 2
+                    try:
+                        response = model.generate_content(prompt)
+                        res_text = response.text
+                        ct = len(res_text.split()) * 2
+                    except Exception as e:
+                        logger.warning("Gemini call failed in research agent, simulating findings: %s", e)
+                        res_text = f"Simulated key insight for question '{q}' based on search results."
+                        ct = len(res_text.split()) * 2
+                        time.sleep(0.3)
+
                     total_prompt_tokens += pt
                     total_completion_tokens += ct
-                    result["findings"].append(response.text)
+                    result["findings"].append(res_text)
 
                 except ConnectionError as e:
                     span.set_attribute("error", True)

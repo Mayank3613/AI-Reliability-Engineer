@@ -27,10 +27,16 @@ class DynatraceClient:
         endpoint = endpoint or os.environ.get("DT_ENDPOINT")
         api_token = api_token or os.environ.get("DT_API_TOKEN")
 
-        if not endpoint:
-            raise EnvironmentError("DT_ENDPOINT must be set for Dynatrace API access")
+        # Fallback to general Dynatrace variables if OTel ones are missing
+        if not endpoint and os.environ.get("DYNATRACE_ENVIRONMENT_ID"):
+            endpoint = f"https://{os.environ.get('DYNATRACE_ENVIRONMENT_ID')}.live.dynatrace.com"
         if not api_token:
-            raise EnvironmentError("DT_API_TOKEN must be set for Dynatrace API access")
+            api_token = os.environ.get("DYNATRACE_API_KEY")
+
+        if not endpoint:
+            raise EnvironmentError("DT_ENDPOINT or DYNATRACE_ENVIRONMENT_ID must be set for Dynatrace API access")
+        if not api_token:
+            raise EnvironmentError("DT_API_TOKEN or DYNATRACE_API_KEY must be set for Dynatrace API access")
 
         self.endpoint = endpoint.rstrip("/")
         self.api_token = api_token
