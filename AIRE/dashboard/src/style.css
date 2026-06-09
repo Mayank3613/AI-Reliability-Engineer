@@ -20,6 +20,24 @@
   --gemini-gradient: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 35%, #3b82f6 70%, #60a5fa 100%);
   --gemini-aurora: linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #3b82f6);
   --text-gradient: linear-gradient(120deg, #ffffff 30%, #a78bfa 70%, #60a5fa 100%);
+
+  /* AIRE Dashboard Theme Mappings */
+  --color-background-primary: var(--panel);
+  --color-background-secondary: rgba(255, 255, 255, 0.02);
+  --color-border-secondary: rgba(255, 255, 255, 0.08);
+  --color-border-tertiary: rgba(255, 255, 255, 0.04);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--muted);
+  --color-text-success: #34d399;
+  --color-background-success: rgba(16, 185, 129, 0.08);
+  --color-background-danger: rgba(239, 68, 68, 0.08);
+  --color-background-info: rgba(59, 130, 246, 0.08);
+  --color-text-info: #60a5fa;
+  --color-border-info: rgba(59, 130, 246, 0.25);
+  --border-radius-lg: 16px;
+  --border-radius-md: 12px;
+  --font-mono: 'Outfit', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 }
 
 * {
