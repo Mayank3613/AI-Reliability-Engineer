@@ -1,4 +1,4 @@
-
+version: "3.9"
 
 # AIRE — Local Development Docker Compose
 # Starts all services needed to run AIRE without connecting to GCP.
@@ -31,7 +31,7 @@ services:
       - OTEL_SERVICE_NAME=aire-backend
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - PYTHONUNBUFFERED=1
-      - PYTHONPATH=/app/AIRE:/app/AIRE/agents:/app/AIRE/observability:/app/AIRE/security:/app/AIRE/safety
+      - PYTHONPATH=/app/AIRE:/app/AIRE/Apps:/app/AIRE/agents:/app/AIRE/observability:/app/AIRE/security:/app/AIRE/safety
     volumes:
       - ./.env:/app/.env:ro
       # Mount Google Application Default Credentials for local GCP access
