@@ -17,7 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-1.5-pro"
+MODEL = os.environ.get("GEMINI_PRO_MODEL", "gemini-2.5-pro")
 AGENT_NAME = "research-agent"
 SYSTEM_PROMPT = """You are a deep research analyst. Given a topic, you:
 1. Break it into sub-questions
@@ -37,6 +37,12 @@ def web_search(query: str) -> str:
     """Simulated web search — high latency, occasional failures."""
     delay = random.uniform(0.5, 2.5)
     time.sleep(delay)
+    q_lower = query.lower()
+    if "timeout" in q_lower or "slow" in q_lower:
+        time.sleep(1.5)
+        raise TimeoutError("Web search timed out")
+    if "rate limit" in q_lower or "429" in q_lower:
+        raise ConnectionError(f"Search API rate limit exceeded for query: '{query}'")
     if random.random() < 0.15:  # 15% failure — creates root cause patterns
         raise ConnectionError(f"Search API rate limit exceeded for query: '{query}'")
     return (

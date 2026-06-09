@@ -697,7 +697,7 @@ def handle_conversational_query(payload: QueryPayload):
 
     use_live_llm = False
     try:
-        gemini = GeminiClient(model_name="gemini-1.5-flash", force_json=True)
+        gemini = GeminiClient(model_name=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"), force_json=True)
         if not gemini.is_fallback:
             use_live_llm = True
     except Exception:

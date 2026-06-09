@@ -17,7 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-1.5-pro"
+MODEL = os.environ.get("GEMINI_PRO_MODEL", "gemini-2.5-pro")
 AGENT_NAME = "coding-agent"
 SYSTEM_PROMPT = """You are an expert software engineer. You write clean, well-tested,
 production-ready code. You explain your reasoning, follow best practices,
@@ -59,9 +59,14 @@ def run_linter(code: str) -> dict:
     return {"issues": issues, "warnings": random.randint(0, 10), "passed": issues == 0}
 
 
-def run_tests(code: str) -> dict:
+def run_tests(code: str, query: str = "") -> dict:
     """Simulated test runner — medium latency, occasional failures."""
     time.sleep(random.uniform(0.3, 1.2))
+    q_lower = query.lower()
+    if "oom" in q_lower or "memory" in q_lower or "fail" in q_lower:
+        raise RuntimeError("Test runner OOMkilled — container exceeded 512MB memory limit")
+    if "permission" in q_lower or "access" in q_lower or "git" in q_lower:
+        raise RuntimeError("PermissionError: write access denied to repository")
     if random.random() < 0.2:
         raise RuntimeError("Test runner OOMkilled — container exceeded 512MB memory limit")
     passed = random.randint(8, 12)
@@ -109,7 +114,7 @@ def process_coding_task(task: dict, tracer, meter) -> dict:
             # Tool: test runner
             with tracer.start_as_current_span("tool.test_runner"):
                 try:
-                    test_result = run_tests(response.text)
+                    test_result = run_tests(response.text, task.get("description", ""))
                     span.set_attribute("coding.test_pass_rate",
                                        test_result["passed"] / test_result["total"])
                 except RuntimeError as e:
