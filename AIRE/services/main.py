@@ -5,6 +5,9 @@ main.py: FastAPI application serving all AIRE backend endpoints.
 
 import os
 import sys
+from dotenv import load_dotenv
+load_dotenv()
+
 # Add Apps directory to path so agents can import otel_setup
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Apps")))
 
