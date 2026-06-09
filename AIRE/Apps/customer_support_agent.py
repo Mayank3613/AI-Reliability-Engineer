@@ -9,7 +9,7 @@ import time
 import random
 import logging
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 from opentelemetry import trace
 
 from otel_setup import setup_otel, record_llm_call

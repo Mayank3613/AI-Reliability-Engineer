@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 # AIRE — Local Development Docker Compose
 # Starts all services needed to run AIRE without connecting to GCP.

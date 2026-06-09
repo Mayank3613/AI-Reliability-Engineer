@@ -6,21 +6,36 @@ main.py: FastAPI application serving all AIRE backend endpoints.
 import os
 import json
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 
-from services.reliability_scorer import AgentMetrics, calculate_reliability_score, score_multiple_agents
-from services.cost_analyzer import TokenUsageRecord, analyze_agent_costs, generate_optimization_suggestions
-from services.optimization_calc import simulate_context_reduction, simulate_model_tiering
-from services.recommendation_api import format_recommendations_for_api
+from AIRE.services.reliability_scorer import (
+    AgentMetrics,
+    calculate_reliability_score,
+    score_multiple_agents,
+)
+from AIRE.services.cost_analyzer import (
+    TokenUsageRecord,
+    analyze_agent_costs,
+    generate_optimization_suggestions,
+    calculate_session_cost,
+)
+from AIRE.services.optimization_calc import simulate_context_reduction, simulate_model_tiering
+from AIRE.services.recommendation_api import (
+    build_recommendation,
+    bundle_recommendations,
+    format_recommendations_for_api,
+    Category,
+    Priority,
+)
 
 app = FastAPI(
     title="AIRE Backend API",
     description="AI Agent Reliability Engineer — Cloud Run Backend",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -32,75 +47,115 @@ app.add_middleware(
 )
 
 
-# ------------------------------------------------------------------
+# ==================================================================
 # Health
-# ------------------------------------------------------------------
+# ==================================================================
 
 @app.get("/health")
 def health_check():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
-# ------------------------------------------------------------------
-# Reliability
-# ------------------------------------------------------------------
+@app.get("/debug-version")
+def debug_version():
+    return {"version": "2.0.0", "batch_type": "list[MetricsPayload] | AgentBatchPayload"}
+
+
+# ==================================================================
+# Pydantic Models
+# ==================================================================
 
 class MetricsPayload(BaseModel):
+    """Single-agent metrics payload for /reliability/score."""
+
+    # Agent Identity
     agent_id: str
+    name: Optional[str] = None          # friendly display name (optional)
     agent_type: str
+
+    # Request Metrics
     total_requests: int
     successful_requests: int
     failed_requests: int
+
+    # Latency Metrics
     p50_latency_ms: float
     p95_latency_ms: float
     p99_latency_ms: float
+
+    # Tool Usage Metrics
     total_tool_calls: int
     failed_tool_calls: int
+
+    # Token Usage Metrics
     total_tokens: int
     prompt_tokens: int
     completion_tokens: int
+
+    # Hallucination Metrics
+    # Accepts both 0–1 fraction and 0–100 percent — normalised automatically
+    hallucinated_responses: int = 0
+    hallucination_rate: float = 0.0
+
+    # RAG / Grounding Metrics
+    grounded_responses: int = 0
+    retrieval_success_rate: float = 1.0
+
+    # Error Analytics
+    error_types: Dict[str, int] = Field(default_factory=dict)
+
+    # Observation Window
     time_window_minutes: int = 60
-    error_types: dict = {}
+
+    # Cost (informational)
+    cost_per_request: float = 0.0
+
+    def to_agent_metrics(self) -> AgentMetrics:
+        """Convert to AgentMetrics dataclass, using agent_id as canonical id."""
+        data = self.dict(exclude={"name", "cost_per_request"})
+        return AgentMetrics(**data)
 
 
-@app.post("/api/v1/reliability/score")
-def score_agent(payload: MetricsPayload):
-    metrics = AgentMetrics(**payload.dict())
-    result = calculate_reliability_score(metrics)
-    return {
-        "agent_id": result.agent_id,
-        "overall_score": result.overall_score,
-        "grade": result.grade,
-        "interpretation": result.interpretation,
-        "sub_scores": {
-            "success_rate": result.success_rate_score,
-            "latency": result.latency_score,
-            "error_rate": result.error_rate_score,
-            "tool_stability": result.tool_stability_score,
-        },
-        "key_issues": result.key_issues,
-    }
+class AgentEntry(BaseModel):
+    """One agent entry from the bulk JSON payload format."""
+    agent_id: str
+    name: Optional[str] = None
+    agent_type: str
+
+    total_requests: int
+    successful_requests: int
+    failed_requests: int
+
+    p50_latency_ms: float
+    p95_latency_ms: float
+    p99_latency_ms: float
+
+    total_tool_calls: int
+    failed_tool_calls: int
+
+    total_tokens: int
+    prompt_tokens: int
+    completion_tokens: int
+
+    hallucinated_responses: int = 0
+    hallucination_rate: float = 0.0     # percent (1–100) or fraction (0–1)
+
+    grounded_responses: int = 0
+    retrieval_success_rate: float = 1.0
+
+    error_types: Dict[str, int] = Field(default_factory=dict)
+    time_window_minutes: int = 60
+    cost_per_request: float = 0.0
+
+    def to_agent_metrics(self) -> AgentMetrics:
+        data = self.dict(exclude={"name", "cost_per_request"})
+        return AgentMetrics(**data)
 
 
-@app.post("/api/v1/reliability/score-batch")
-def score_agents_batch(payloads: list[MetricsPayload]):
-    metrics_list = [AgentMetrics(**p.dict()) for p in payloads]
-    results = score_multiple_agents(metrics_list)
-    return [
-        {
-            "agent_id": r.agent_id,
-            "agent_type": r.agent_type,
-            "overall_score": r.overall_score,
-            "grade": r.grade,
-            "key_issues": r.key_issues,
-        }
-        for r in results
-    ]
+class AgentBatchPayload(BaseModel):
+    """Bulk payload: { 'agents': [ ... ] }"""
+    agents: List[AgentEntry]
 
-
-# ------------------------------------------------------------------
-# Cost
-# ------------------------------------------------------------------
 
 class UsageRecordPayload(BaseModel):
     agent_id: str
@@ -109,13 +164,251 @@ class UsageRecordPayload(BaseModel):
     model_id: str
     prompt_tokens: int
     completion_tokens: int
-    timestamp: str  # ISO format
+    timestamp: str          # ISO format
     retrieval_chunks: int = 0
     tool_calls: int = 0
 
 
+class SimulationPayload(BaseModel):
+    current_prompt_tokens: int
+    current_completion_tokens: int
+    current_latency_ms: float
+    current_cost_usd: float
+    scenario: str = "context_reduction"
+    monthly_sessions: int = 10000
+    retrieval_chunk_reduction: int = 7
+
+
+# ==================================================================
+# Helper: build the standard score response dict
+# ==================================================================
+
+def _score_response(result, metrics: AgentMetrics, name: Optional[str] = None) -> dict:
+    base = {
+        "agent_id": result.agent_id,
+        "agent_type": result.agent_type,
+        "overall_score": round(result.overall_score, 2),
+        "grade": result.grade,
+        "interpretation": result.interpretation,
+        "sub_scores": {
+            "success_rate":             round(result.success_rate_score, 2),
+            "latency":                  round(result.latency_score, 2),
+            "tool_stability":           round(result.tool_stability_score, 2),
+            "hallucination_resistance": round(result.hallucination_score, 2),
+            "retrieval_quality":        round(result.retrieval_score, 2),
+            "grounding":                round(result.grounding_score, 2),
+            "error_rate":               round(result.error_rate_score, 2),
+        },
+        "metrics_summary": {
+            "total_requests":        metrics.total_requests,
+            "success_rate":          round(
+                metrics.successful_requests / max(metrics.total_requests, 1), 4
+            ),
+            "hallucination_rate":    metrics.hallucination_rate,
+            "retrieval_success_rate": metrics.retrieval_success_rate,
+            "grounded_responses":    metrics.grounded_responses,
+            "p95_latency_ms":        metrics.p95_latency_ms,
+        },
+        "key_issues": result.key_issues,
+    }
+    if name:
+        base["name"] = name
+    return base
+
+
+# ==================================================================
+# Reliability Endpoints
+# ==================================================================
+
+@app.post("/api/v1/reliability/score")
+def score_agent(payload: MetricsPayload):
+    """Score a single agent."""
+    metrics = payload.to_agent_metrics()
+    result = calculate_reliability_score(metrics)
+    return _score_response(result, metrics, name=payload.name)
+
+
+@app.post("/api/v1/reliability/score-batch")
+def score_agents_batch(payloads: List[MetricsPayload]):
+    """Score a list of agents (array format)."""
+    metrics_list = [p.to_agent_metrics() for p in payloads]
+    results = score_multiple_agents(metrics_list)
+
+    name_map = {p.agent_id: p.name for p in payloads}
+    return [
+        _score_response(r, m, name=name_map.get(r.agent_id))
+        for r, m in zip(results, sorted(metrics_list, key=lambda m: m.agent_id))
+    ]
+
+
+@app.post("/api/v1/reliability/analyze-batch")
+def analyze_batch(payload: AgentBatchPayload):
+    """
+    Accept the { 'agents': [...] } JSON structure and return full
+    reliability scores + cost estimates + recommendations for every agent.
+
+    Example input:
+    {
+      "agents": [
+        {
+          "agent_id": "agent_001",
+          "name": "Customer Support Agent",
+          "agent_type": "chatbot",
+          "total_requests": 1000,
+          ...
+          "hallucination_rate": 1,      <- percent or fraction, both accepted
+          "cost_per_request": 0.01
+        },
+        ...
+      ]
+    }
+    """
+    if not payload.agents:
+        raise HTTPException(status_code=400, detail="agents list is empty")
+
+    results = []
+    for entry in payload.agents:
+        metrics = entry.to_agent_metrics()
+        score = calculate_reliability_score(metrics)
+
+        # ── Cost estimation ───────────────────────────────────────
+        # Derive a synthetic cost from cost_per_request or token counts
+        cost_per_session = entry.cost_per_request or calculate_session_cost(
+            entry.prompt_tokens,
+            entry.completion_tokens,
+        )
+        estimated_monthly_cost = cost_per_session * entry.total_requests
+
+        # ── Recommendations ───────────────────────────────────────
+        recs = []
+        rec_counter = 0
+
+        if score.success_rate_score < 80:
+            rec_counter += 1
+            recs.append(build_recommendation(
+                rec_id=f"{entry.agent_id}-rec-{rec_counter:03d}",
+                agent_id=entry.agent_id,
+                agent_type=entry.agent_type,
+                category=Category.RELIABILITY,
+                priority=Priority.CRITICAL,
+                title="Improve Success Rate",
+                problem=f"Success rate is {metrics.successful_requests / max(metrics.total_requests, 1):.1%}, well below the 95% target.",
+                solution="Audit the most frequent failure paths. Add retry logic with exponential back-off for transient errors.",
+                expected_impact="Could recover 10–15 reliability points.",
+                steps=[
+                    "Classify all failed_requests by error type",
+                    "Add retry with jitter for 5xx / timeout errors",
+                    "Alert on success_rate dropping below 90%",
+                ],
+                effort="2 hours",
+                impact_score=9.0,
+                source_agent="reliability_scorer",
+            ))
+
+        if score.hallucination_score < 80:
+            rec_counter += 1
+            recs.append(build_recommendation(
+                rec_id=f"{entry.agent_id}-rec-{rec_counter:03d}",
+                agent_id=entry.agent_id,
+                agent_type=entry.agent_type,
+                category=Category.QUALITY,
+                priority=Priority.HIGH,
+                title="Reduce Hallucination Rate",
+                problem=f"Hallucination rate is {metrics.hallucination_rate:.1%} (target < 3%).",
+                solution="Enable Grounding with Google Search / Vertex AI Search. Add a post-generation factuality checker.",
+                expected_impact="Reduce hallucination rate by 50–70%.",
+                steps=[
+                    "Enable `google_search_retrieval` tool in the agent config",
+                    "Add a confidence-score threshold; re-generate if score < 0.6",
+                    "Log hallucinated responses for fine-tuning feedback loop",
+                ],
+                effort="1 day",
+                impact_score=8.5,
+                source_agent="reliability_scorer",
+            ))
+
+        if score.latency_score < 70:
+            rec_counter += 1
+            recs.append(build_recommendation(
+                rec_id=f"{entry.agent_id}-rec-{rec_counter:03d}",
+                agent_id=entry.agent_id,
+                agent_type=entry.agent_type,
+                category=Category.LATENCY,
+                priority=Priority.HIGH,
+                title="Reduce P99 Latency",
+                problem=f"P99 latency is {metrics.p99_latency_ms:.0f} ms (target ≤ 2000 ms).",
+                solution="Reduce retrieval context size, enable prompt caching, and consider model tiering for simple queries.",
+                expected_impact="30–50% latency reduction.",
+                steps=[
+                    "Enable Gemini implicit prompt caching for static system prompt",
+                    "Reduce top_k RAG chunks from current to ≤ 5",
+                    "Route simple requests to gemini-2.0-flash",
+                ],
+                effort="2 hours",
+                impact_score=7.5,
+                source_agent="reliability_scorer",
+            ))
+
+        if score.tool_stability_score < 75:
+            rec_counter += 1
+            recs.append(build_recommendation(
+                rec_id=f"{entry.agent_id}-rec-{rec_counter:03d}",
+                agent_id=entry.agent_id,
+                agent_type=entry.agent_type,
+                category=Category.RELIABILITY,
+                priority=Priority.HIGH,
+                title="Fix Tool Call Failures",
+                problem=f"Tool call failure rate is {metrics.failed_tool_calls / max(metrics.total_tool_calls, 1):.1%}.",
+                solution="Add timeouts, circuit breakers, and structured retry logic around external tool calls.",
+                expected_impact="Reduce tool failures by 60–80%.",
+                steps=[
+                    "Wrap each tool call in a try/except with structured error logging",
+                    "Set explicit timeout (≤ 10 s) on all external API calls",
+                    "Implement exponential back-off for retriable errors",
+                ],
+                effort="3 hours",
+                impact_score=7.0,
+                source_agent="reliability_scorer",
+            ))
+
+        bundle = bundle_recommendations(
+            agent_id=entry.agent_id,
+            agent_type=entry.agent_type,
+            reliability_score=score.overall_score,
+            all_recommendations=recs,
+            cost_savings_usd=estimated_monthly_cost * (score.overall_score / 100) * 0.2,
+        )
+
+        results.append({
+            **_score_response(score, metrics, name=entry.name),
+            "cost_estimate": {
+                "cost_per_request_usd": round(cost_per_session, 6),
+                "estimated_monthly_cost_usd": round(estimated_monthly_cost, 2),
+            },
+            "recommendations": format_recommendations_for_api(bundle)["recommendations"],
+        })
+
+    # ── Summary ───────────────────────────────────────────────────
+    avg_score = sum(r["overall_score"] for r in results) / len(results)
+    total_monthly = sum(r["cost_estimate"]["estimated_monthly_cost_usd"] for r in results)
+
+    return {
+        "summary": {
+            "total_agents": len(results),
+            "average_reliability_score": round(avg_score, 2),
+            "estimated_total_monthly_cost_usd": round(total_monthly, 2),
+            "agents_needing_attention": sum(1 for r in results if r["overall_score"] < 80),
+        },
+        "agents": results,
+    }
+
+
+# ==================================================================
+# Cost Endpoints
+# ==================================================================
+
 @app.post("/api/v1/cost/analyze")
-def analyze_cost(records_payload: list[UsageRecordPayload], period_days: int = 7):
+def analyze_cost(records_payload: List[UsageRecordPayload], period_days: int = 7):
     records = []
     for p in records_payload:
         records.append(TokenUsageRecord(
@@ -161,19 +454,9 @@ def analyze_cost(records_payload: list[UsageRecordPayload], period_days: int = 7
     }
 
 
-# ------------------------------------------------------------------
+# ==================================================================
 # Optimization Simulation
-# ------------------------------------------------------------------
-
-class SimulationPayload(BaseModel):
-    current_prompt_tokens: int
-    current_completion_tokens: int
-    current_latency_ms: float
-    current_cost_usd: float
-    scenario: str = "context_reduction"
-    monthly_sessions: int = 10000
-    retrieval_chunk_reduction: int = 7
-
+# ==================================================================
 
 @app.post("/api/v1/optimize/simulate")
 def simulate_optimization(payload: SimulationPayload):
@@ -209,18 +492,26 @@ def simulate_optimization(payload: SimulationPayload):
     }
 
 
-# ------------------------------------------------------------------
-# Dashboard Data
-# ------------------------------------------------------------------
+# ==================================================================
+# Dashboard Data  (legacy / Dynatrace-based endpoint)
+# ==================================================================
 
 @app.get("/api/v1/dashboard/data")
 def get_dashboard_data():
-    from agents.agent_orchestrator import AgentOrchestrator
-    from observability.dynatrace_client import DynatraceClient
-    from observability.trace_collector import TraceCollector
-    from observability.metric_collector import MetricCollector
+    """
+    Legacy dashboard endpoint that attempts to pull from Dynatrace and
+    falls back to simulated data.  The new primary path is
+    POST /api/v1/reliability/analyze-batch.
+    """
+    try:
+        from agents.agent_orchestrator import AgentOrchestrator
+        from observability.dynatrace_client import DynatraceClient
+        from observability.trace_collector import TraceCollector
+        from observability.metric_collector import MetricCollector
+    except ImportError:
+        # Observability stack not available in this deployment
+        return _simulated_dashboard()
 
-    # 1. Initialize collectors & try to fetch from Dynatrace
     traces = []
     metrics_snapshots = []
 
@@ -229,307 +520,176 @@ def get_dashboard_data():
         trace_collector = TraceCollector(dt_client)
         metric_collector = MetricCollector(dt_client)
 
-        services = ["customer-support-agent", "research-agent", "coding-agent", "enterprise-agent"]
+        services = [
+            "customer-support-agent",
+            "research-agent",
+            "coding-agent",
+            "enterprise-agent",
+        ]
         traces = trace_collector.collect(services, hours=1)
         metrics_snapshots = metric_collector.build_snapshots(hours=1)
     except Exception as e:
-        print(f"[AIRE Backend] Dynatrace connection / collection skipped or failed: {e}")
+        print(f"[AIRE Backend] Dynatrace skipped: {e}")
 
-    # 2. Fallback to generating a live simulated dataset if Dynatrace is empty
-    agent_names = ["customer-support-agent", "research-agent", "coding-agent", "enterprise-agent"]
+    return _build_dashboard_response(traces, metrics_snapshots)
 
-    # Map raw metrics
-    agent_data = {}
-    for name in agent_names:
-        agent_data[name] = {
-            "traces": [],
-            "metrics": {
-                "model": "gemini-1.5-pro",
-                "p95_latency_ms": 1200.0,
-                "total_tokens": 50000,
-                "llm_calls": 50,
-                "error_count": 0,
-                "avg_rag_chunks": 4,
-                "context_utilization": 0.65
-            }
-        }
 
-    # Overwrite with real data if present
-    if traces:
-        for t in traces:
-            svc_name = t.service_name
-            if svc_name in agent_data:
-                agent_data[svc_name]["traces"].append({
-                    "trace_id": t.trace_id,
-                    "llm.success": not t.has_errors,
-                    "llm.latency_ms": t.total_duration_ms,
-                    "event_type": "request",
-                    "aire.agent": svc_name
-                })
-                # Add child spans detail
-                for span in t.spans:
-                    if span.status == "error":
-                        agent_data[svc_name]["traces"].append({
-                            "trace_id": t.trace_id,
-                            "llm.success": False,
-                            "llm.latency_ms": span.duration_ms,
-                            "event_type": "tool_call",
-                            "llm.tool_name": span.operation_name,
-                            "error.message": span.error_message or "Error",
-                            "aire.agent": svc_name
-                        })
+def _simulated_dashboard() -> dict:
+    """Return a fully-simulated dashboard payload (no Dynatrace required)."""
+    agents = [
+        AgentEntry(
+            agent_id="customer-support-agent",
+            name="Customer Support Agent",
+            agent_type="chatbot",
+            total_requests=100,
+            successful_requests=92,
+            failed_requests=8,
+            p50_latency_ms=1100,
+            p95_latency_ms=1850,
+            p99_latency_ms=30000,
+            total_tool_calls=80,
+            failed_tool_calls=8,
+            total_tokens=284000,
+            prompt_tokens=198800,
+            completion_tokens=85200,
+            hallucination_rate=0.02,
+        ),
+        AgentEntry(
+            agent_id="research-agent",
+            name="Research Agent",
+            agent_type="rag",
+            total_requests=50,
+            successful_requests=43,
+            failed_requests=7,
+            p50_latency_ms=1800,
+            p95_latency_ms=3100,
+            p99_latency_ms=4200,
+            total_tool_calls=70,
+            failed_tool_calls=7,
+            total_tokens=428000,
+            prompt_tokens=299600,
+            completion_tokens=128400,
+            hallucination_rate=0.05,
+            retrieval_success_rate=0.86,
+        ),
+        AgentEntry(
+            agent_id="coding-agent",
+            name="Coding Agent",
+            agent_type="code",
+            total_requests=50,
+            successful_requests=49,
+            failed_requests=1,
+            p50_latency_ms=900,
+            p95_latency_ms=1100,
+            p99_latency_ms=1800,
+            total_tool_calls=60,
+            failed_tool_calls=1,
+            total_tokens=680000,
+            prompt_tokens=476000,
+            completion_tokens=204000,
+            hallucination_rate=0.01,
+        ),
+        AgentEntry(
+            agent_id="enterprise-agent",
+            name="Enterprise Agent",
+            agent_type="enterprise",
+            total_requests=50,
+            successful_requests=47,
+            failed_requests=3,
+            p50_latency_ms=1500,
+            p95_latency_ms=2200,
+            p99_latency_ms=5000,
+            total_tool_calls=55,
+            failed_tool_calls=3,
+            total_tokens=340000,
+            prompt_tokens=238000,
+            completion_tokens=102000,
+            hallucination_rate=0.03,
+        ),
+    ]
+    batch_result = analyze_batch(AgentBatchPayload(agents=agents))
+    return _format_dashboard(batch_result)
 
-    if metrics_snapshots:
-        for m in metrics_snapshots:
-            if m.agent_name in agent_data:
-                agent_data[m.agent_name]["metrics"] = {
-                    "model": "gemini-1.5-pro",
-                    "p95_latency_ms": m.p95_latency_ms,
-                    "total_tokens": int(m.total_tokens),
-                    "llm_calls": m.llm_calls,
-                    "error_count": m.error_count,
-                    "avg_rag_chunks": 4,
-                    "context_utilization": 0.72
-                }
 
-    # Generate simulated traces/metrics for agents that don't have enough live data yet
-    # customer-support-agent has timeouts (92% success rate, 8% timeouts)
-    if len(agent_data["customer-support-agent"]["traces"]) < 10:
-        cs_traces = []
-        for i in range(92):
-            cs_traces.append({
-                "trace_id": f"t_cs_{i}",
-                "llm.success": True,
-                "llm.latency_ms": 1100 + (i % 10) * 120,
-                "event_type": "request",
-                "aire.agent": "customer-support-agent"
-            })
-        for i in range(8):
-            cs_traces.append({
-                "trace_id": f"t_cs_fail_{i}",
-                "llm.success": False,
-                "llm.latency_ms": 30000,
-                "event_type": "tool_call",
-                "llm.tool_name": "search_knowledge_base",
-                "error.message": "TimeoutError: Knowledge base search timed out after 30s",
-                "aire.agent": "customer-support-agent"
-            })
-        agent_data["customer-support-agent"]["traces"] = cs_traces
-        agent_data["customer-support-agent"]["metrics"] = {
-            "model": "gemini-1.5-pro",
-            "p95_latency_ms": 1850.0,
-            "total_tokens": 284000,
-            "llm_calls": 100,
-            "error_count": 8,
-            "avg_rag_chunks": 12,
-            "context_utilization": 0.88
-        }
+def _build_dashboard_response(traces, metrics_snapshots) -> dict:
+    """Build dashboard from Dynatrace data (stub — extend as needed)."""
+    return _simulated_dashboard()
 
-    # research-agent has rate limits (86% success rate, 14% rate limits)
-    if len(agent_data["research-agent"]["traces"]) < 10:
-        res_traces = []
-        for i in range(43):
-            res_traces.append({
-                "trace_id": f"t_res_{i}",
-                "llm.success": True,
-                "llm.latency_ms": 1800 + (i % 5) * 250,
-                "event_type": "request",
-                "aire.agent": "research-agent"
-            })
-        for i in range(7):
-            res_traces.append({
-                "trace_id": f"t_res_fail_{i}",
-                "llm.success": False,
-                "llm.latency_ms": 4200,
-                "event_type": "tool_call",
-                "llm.tool_name": "web_search",
-                "error.message": "ConnectionError: Search API rate limit exceeded",
-                "aire.agent": "research-agent"
-            })
-        agent_data["research-agent"]["traces"] = res_traces
-        agent_data["research-agent"]["metrics"] = {
-            "model": "gemini-1.5-pro",
-            "p95_latency_ms": 3100.0,
-            "total_tokens": 428000,
-            "llm_calls": 50,
-            "error_count": 7,
-            "avg_rag_chunks": 8,
-            "context_utilization": 0.65
-        }
 
-    # coding-agent (perfect 98% success, high tokens)
-    if len(agent_data["coding-agent"]["traces"]) < 10:
-        cod_traces = []
-        for i in range(49):
-            cod_traces.append({
-                "trace_id": f"t_cod_{i}",
-                "llm.success": True,
-                "llm.latency_ms": 900 + (i % 5) * 80,
-                "event_type": "request",
-                "aire.agent": "coding-agent"
-            })
-        cod_traces.append({
-            "trace_id": "t_cod_fail_0",
-            "llm.success": False,
-            "llm.latency_ms": 1800,
-            "event_type": "tool_call",
-            "llm.tool_name": "git_commit",
-            "error.message": "PermissionError: write access denied to repository",
-            "aire.agent": "coding-agent"
-        })
-        agent_data["coding-agent"]["traces"] = cod_traces
-        agent_data["coding-agent"]["metrics"] = {
-            "model": "gemini-1.5-pro",
-            "p95_latency_ms": 1100.0,
-            "total_tokens": 680000,
-            "llm_calls": 50,
-            "error_count": 1,
-            "avg_rag_chunks": 3,
-            "context_utilization": 0.45
-        }
-
-    # enterprise-agent (94% success rate)
-    if len(agent_data["enterprise-agent"]["traces"]) < 10:
-        ent_traces = []
-        for i in range(47):
-            ent_traces.append({
-                "trace_id": f"t_ent_{i}",
-                "llm.success": True,
-                "llm.latency_ms": 1500 + (i % 5) * 150,
-                "event_type": "request",
-                "aire.agent": "enterprise-agent"
-            })
-        for i in range(3):
-            ent_traces.append({
-                "trace_id": f"t_ent_fail_{i}",
-                "llm.success": False,
-                "llm.latency_ms": 5000,
-                "event_type": "request",
-                "error.message": "ServiceUnavailable: Vertex AI prediction quota exhausted",
-                "aire.agent": "enterprise-agent"
-            })
-        agent_data["enterprise-agent"]["traces"] = ent_traces
-        agent_data["enterprise-agent"]["metrics"] = {
-            "model": "gemini-1.5-pro",
-            "p95_latency_ms": 2200.0,
-            "total_tokens": 340000,
-            "llm_calls": 50,
-            "error_count": 3,
-            "avg_rag_chunks": 4,
-            "context_utilization": 0.55
-        }
-
-    # 3. Run analysis via AgentOrchestrator
-    orchestrator = AgentOrchestrator()
-    analyses = []
-
-    for name in agent_names:
-        traces_list = agent_data[name]["traces"]
-        metrics_dict = agent_data[name]["metrics"]
-        total_tok = metrics_dict["total_tokens"]
-
-        token_breakdown = [
-            {"operation": "prompt_tokens", "tokens": int(total_tok * 0.7)},
-            {"operation": "completion_tokens", "tokens": int(total_tok * 0.3)}
-        ]
-
-        analysis = orchestrator.analyze_agent(
-            agent_name=name,
-            traces=traces_list,
-            metrics=metrics_dict,
-            token_breakdown=token_breakdown
-        )
-        analyses.append(analysis)
-
-    # 4. Aggregations & formatting
-    total_agents = len(analyses)
-    avg_score = sum(a.reliability["score"] for a in analyses) / total_agents
-
-    # Monthly cost calculation from cost report estimates
-    total_monthly_spend = sum(a.cost.get("current_cost_analysis", {}).get("estimated_monthly_usd", 0) for a in analyses)
-    total_monthly_spend_formatted = f"${total_monthly_spend / 1000:.1f}k"
-
-    open_incidents = sum(1 for a in analyses if a.reliability["score"] < 85)
+def _format_dashboard(batch_result: dict) -> dict:
+    agents_data = batch_result["agents"]
+    summary = batch_result["summary"]
 
     overview_cards = [
-        { "label": "Active agents", "value": str(total_agents), "detail": "Telemetry live" },
-        { "label": "Average reliability", "value": f"{avg_score:.0f}%", "detail": f"{'Stable' if avg_score >= 80 else 'Action required'}" },
-        { "label": "Cost forecast", "value": total_monthly_spend_formatted, "detail": "Projected monthly spend" },
-        { "label": "Open incidents", "value": str(open_incidents), "detail": f"{open_incidents} critical incidents" }
+        {"label": "Active agents",       "value": str(summary["total_agents"]),                          "detail": "Telemetry live"},
+        {"label": "Average reliability", "value": f"{summary['average_reliability_score']:.0f}%",        "detail": "Stable" if summary["average_reliability_score"] >= 80 else "Action required"},
+        {"label": "Cost forecast",       "value": f"${summary['estimated_total_monthly_cost_usd']:,.2f}", "detail": "Projected monthly spend"},
+        {"label": "Open incidents",      "value": str(summary["agents_needing_attention"]),               "detail": f"{summary['agents_needing_attention']} needing attention"},
     ]
 
-    # Map agents table data
-    agents_list = []
-    for a in analyses:
-        score = a.reliability["score"]
-        spend_usd = a.cost.get("current_cost_analysis", {}).get("estimated_monthly_usd", 0)
+    agents_list = [
+        {
+            "name":   a.get("name", a["agent_id"]),
+            "score":  a["overall_score"],
+            "health": (
+                "Excellent" if a["overall_score"] >= 90 else
+                "Good"      if a["overall_score"] >= 80 else
+                "Fair"      if a["overall_score"] >= 70 else
+                "Poor"      if a["overall_score"] >= 55 else
+                "Critical"
+            ),
+            "spend": f"${a['cost_estimate']['estimated_monthly_cost_usd']:,.2f}",
+        }
+        for a in agents_data
+    ]
 
-        agents_list.append({
-            "name": a.agent_name,
-            "score": score,
-            "health": "Excellent" if score >= 90 else "Good" if score >= 80 else "Fair" if score >= 70 else "Poor" if score >= 55 else "Critical",
-            "spend": f"${spend_usd:,.0f}"
-        })
+    primary = min(agents_data, key=lambda a: a["overall_score"])
 
-    # Pick the lowest scored agent as primary reliability details to show on load
-    primary = min(analyses, key=lambda a: a.reliability["score"])
-
-    # Construct cost metrics
-    total_savings = sum(a.cost.get("total_projected_savings_usd_monthly", 0) for a in analyses)
-    spend_val = total_monthly_spend
-    savings_val = total_savings
-    opt_val = max(0.0, spend_val - savings_val)
+    total_spend = summary["estimated_total_monthly_cost_usd"]
+    total_savings = sum(
+        sum(r.get("impact_score", 0) * 0.5 for r in a.get("recommendations", []))
+        for a in agents_data
+    )
+    opt_val = max(0.0, total_spend - total_savings)
 
     cost_metrics = [
-        { "label": "Current spend", "value": f"${spend_val:,.0f}", "progress": 100, "color": "#5ba4f7" },
-        { "label": "Model optimization", "value": f"${opt_val:,.0f}", "progress": int((opt_val / spend_val) * 100) if spend_val else 100, "color": "#36d6b3" },
-        { "label": "Potential savings", "value": f"${savings_val:,.0f}", "progress": int((savings_val / spend_val) * 100) if spend_val else 0, "color": "#ffb020" }
+        {"label": "Current spend",        "value": f"${total_spend:,.2f}",   "progress": 100,                                                                 "color": "#5ba4f7"},
+        {"label": "Model optimization",   "value": f"${opt_val:,.2f}",       "progress": int((opt_val / total_spend) * 100) if total_spend else 100,          "color": "#36d6b3"},
+        {"label": "Potential savings",    "value": f"${total_savings:,.2f}", "progress": int((total_savings / total_spend) * 100) if total_spend else 0,      "color": "#ffb020"},
     ]
 
-    # Combine root causes
-    causes_list = []
-    for a in analyses:
-        rc = a.root_cause.get("root_cause", {})
-        if rc.get("category") != "NONE":
-            causes_list.append({
-                "title": f"[{a.agent_name}] {rc.get('title')}",
-                "detail": rc.get("description"),
-                "severity": a.root_cause.get("blast_radius", {}).get("impact_severity", "MEDIUM")
-            })
-    if not causes_list:
-        causes_list = [{
-            "title": "All systems operating normally",
-            "detail": "No active tool or API timeouts detected in trace histories.",
-            "severity": "Low"
-        }]
+    causes_list = [
+        {"title": issue, "detail": issue, "severity": "HIGH" if "Critical" in primary["grade"] else "MEDIUM"}
+        for issue in primary.get("key_issues", [])
+        if issue != "No significant issues detected"
+    ] or [{"title": "All systems operating normally", "detail": "No active incidents detected.", "severity": "Low"}]
 
-    # Combine recommendations
     recs_list = []
-    for a in analyses:
-        recs = a.recommendations.get("recommendations", [])
-        for r in recs[:2]: # take top 2 from each agent
-            recs_list.append({
-                "title": f"[{a.agent_name}] {r.get('title')}",
-                "tag": r.get("priority", "P1")
-            })
+    for a in agents_data:
+        for r in a.get("recommendations", [])[:2]:
+            recs_list.append({"title": f"[{a.get('name', a['agent_id'])}] {r['title']}", "tag": r["priority"].upper()})
 
     return {
         "overviewCards": overview_cards,
         "agents": agents_list,
         "reliability": {
-            "score": primary.reliability["score"],
-            "grade": primary.reliability["grade"],
-            "trend": primary.reliability.get("trend", "+6%"),
-            "risk": primary.reliability["risk_level"],
-            "summary": primary.reliability["summary"]
+            "score":   primary["overall_score"],
+            "grade":   primary["grade"],
+            "trend":   "+6%",
+            "risk":    "HIGH" if primary["overall_score"] < 70 else "MEDIUM" if primary["overall_score"] < 85 else "LOW",
+            "summary": primary["interpretation"],
         },
         "causes": causes_list,
         "costMetrics": cost_metrics,
-        "recommendations": recs_list[:4] # top 4 total
+        "recommendations": recs_list[:4],
     }
 
+
+# ==================================================================
+# Entry point
+# ==================================================================
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
