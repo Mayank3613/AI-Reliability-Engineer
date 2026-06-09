@@ -54,7 +54,7 @@ class GeminiClient:
         api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.is_fallback = False
 
-        if not api_key or api_key == "AQ.Ab8RN6LMvNdtUcYNNRbn9HEuPhtn7aCYVvYXK6C-qL6Z9PcyHw" or api_key.startswith("AIzaSyXX"):
+        if not api_key or api_key.startswith("AIzaSyXX"):
             logger.warning("[AIRE] Invalid or missing GEMINI_API_KEY. Activating offline fallback mode.")
             self.is_fallback = True
             api_key = "MOCK_KEY"
