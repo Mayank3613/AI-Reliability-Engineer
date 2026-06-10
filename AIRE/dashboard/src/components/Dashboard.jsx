@@ -8,6 +8,8 @@ import {
   CheckCircle, Play, RefreshCw, ChevronDown, ChevronUp, Zap
 } from "lucide-react";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
 // Chart colors — hardcoded because canvas cannot read CSS variables
 const C = {
   teal: "#1D9E75", tealLight: "#9FE1CB",
@@ -500,7 +502,7 @@ export default function AIREDashboard() {
     }
 
     try {
-      const response = await fetch("http://localhost:8080/api/v1/dashboard/query", {
+      const response = await fetch(`${API_URL}/api/v1/dashboard/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: queryText, agent_name: selectedAgent })
