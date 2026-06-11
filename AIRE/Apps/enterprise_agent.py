@@ -17,7 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-1.5-flash"  # Flash model for enterprise — cost-conscious
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")  # Flash model for enterprise — cost-conscious
 AGENT_NAME = "enterprise-agent"
 SYSTEM_PROMPT = """You are an internal enterprise assistant with access to company policies,
 HR documents, IT runbooks, and procurement systems. Always cite the policy source.
@@ -36,6 +36,13 @@ ENTERPRISE_QUERIES = [
 def retrieve_policy_docs(dept: str, query: str) -> list[dict]:
     """Simulated RAG retrieval — returns policy chunks with scores."""
     time.sleep(random.uniform(0.1, 0.6))
+    q_lower = query.lower()
+    if "timeout" in q_lower or "slow" in q_lower:
+        time.sleep(1.5)
+        raise TimeoutError("Vector search timed out — index overloaded")
+    if "quota" in q_lower or "limit" in q_lower:
+        # We can trigger quota limit issue directly
+        raise RuntimeError("ServiceUnavailable: Vertex AI prediction quota exhausted")
     num_chunks = random.randint(3, 12)  # Variable retrieval — cost analysis target
     if num_chunks > 8 and random.random() < 0.3:
         raise TimeoutError("Vector search timed out — index overloaded")

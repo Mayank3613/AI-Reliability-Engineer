@@ -8,8 +8,16 @@ import sys
 from dotenv import load_dotenv
 load_dotenv()
 
-# Add Apps directory to path so agents can import otel_setup
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Apps")))
+# Add parent and internal directories to path so agents and services can import dynamically
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.extend([
+    parent_dir,
+    os.path.join(parent_dir, "Apps"),
+    os.path.join(parent_dir, "agents"),
+    os.path.join(parent_dir, "observability"),
+    os.path.join(parent_dir, "security"),
+    os.path.join(parent_dir, "safety")
+])
 
 import json
 from datetime import datetime, timezone
@@ -19,10 +27,10 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from AIRE.services.reliability_scorer import AgentMetrics, calculate_reliability_score, score_multiple_agents
-from AIRE.services.cost_analyzer import TokenUsageRecord, analyze_agent_costs, generate_optimization_suggestions
-from AIRE.services.optimization_calc import simulate_context_reduction, simulate_model_tiering
-from AIRE.services.recommendation_api import format_recommendations_for_api
+from services.reliability_scorer import AgentMetrics, calculate_reliability_score, score_multiple_agents
+from services.cost_analyzer import TokenUsageRecord, analyze_agent_costs, generate_optimization_suggestions
+from services.optimization_calc import simulate_context_reduction, simulate_model_tiering
+from services.recommendation_api import format_recommendations_for_api
 
 app = FastAPI(
     title="AIRE Backend API",
@@ -697,7 +705,7 @@ def handle_conversational_query(payload: QueryPayload):
 
     use_live_llm = False
     try:
-        gemini = GeminiClient(model_name="gemini-1.5-flash", force_json=True)
+        gemini = GeminiClient(model_name=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"), force_json=True)
         if not gemini.is_fallback:
             use_live_llm = True
     except Exception:

@@ -9,7 +9,7 @@ import time
 import random
 import logging
 from dotenv import load_dotenv
-from google import genai
+import google.generativeai as genai
 from opentelemetry import trace
 
 from otel_setup import setup_otel, record_llm_call
@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 # --- Agent config ---
-MODEL = "gemini-1.5-pro"
+MODEL = os.environ.get("GEMINI_PRO_MODEL", "gemini-2.5-pro")
 AGENT_NAME = "customer-support-agent"
 SYSTEM_PROMPT = """You are a helpful customer support agent for a SaaS platform.
 You have access to tools: search_knowledge_base, lookup_order, escalate_ticket.
@@ -37,6 +37,12 @@ SAMPLE_TICKETS = [
 def search_knowledge_base(query: str) -> str:
     """Simulated KB search tool call."""
     time.sleep(random.uniform(0.1, 0.4))
+    q_lower = query.lower()
+    if "timeout" in q_lower or "slow" in q_lower:
+        time.sleep(1.5)
+        raise TimeoutError("Knowledge base search timed out after 30s")
+    if "rate limit" in q_lower or "429" in q_lower:
+        raise ConnectionError("Search API rate limit exceeded")
     if random.random() < 0.1:  # 10% failure rate for AIRE to catch
         raise TimeoutError("Knowledge base search timed out after 30s")
     return f"KB Article: '{query}' — Found relevant documentation in 3 articles."
