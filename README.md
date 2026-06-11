@@ -216,6 +216,12 @@ with tracer.start_as_current_span("agent.request") as parent:
 > **Key attributes**: `tool.was_speculative` identifies unnecessary tool calls. `tool.status = "timeout"` lets the Root Cause Agent find failure patterns from structured data, not log parsing.
 
 ---
+# AIRE – AI Reliability Engineer
+
+AIRE is an intelligent observability and reliability platform designed to measure, monitor, and improve the performance of AI agents in real time. By integrating telemetry from Dynatrace, OpenTelemetry, Google Gemini, and Vertex AI Search, AIRE transforms raw operational data into actionable reliability insights. The platform evaluates critical metrics such as success rate, latency, error rate, and tool stability to generate a comprehensive reliability score for every AI workflow.
+
+Built with a scalable microservices architecture, AIRE enables teams to identify failures faster, optimize agent performance, and maintain trustworthy AI systems at scale. Advanced analytics, automated scoring, knowledge retrieval, and cloud-native integrations provide end-to-end visibility into AI operations. Whether for hackathons, enterprise deployments, or production AI environments, AIRE empowers organizations to build resilient, observable, and reliable AI applications with confidence.
+
 
 ##  Project Structure
 
