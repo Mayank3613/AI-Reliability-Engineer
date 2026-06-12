@@ -8,6 +8,11 @@
 [![Dynatrace](https://img.shields.io/badge/Dynatrace-AI%20Observability-6F2DA8?style=for-the-badge&logo=dynatrace&logoColor=white)](https://www.dynatrace.com/)
 [![Gemini](https://img.shields.io/badge/Gemini-Enterprise%20Agents-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://cloud.google.com/gemini)
 [![License](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
+[![Netlify Deploy](https://img.shields.io/badge/Netlify-Live%20Demo-00AD9F?style=for-the-badge&logo=netlify&logoColor=white)](https://ai-reliability-engineer.netlify.app/)
+
+<br>
+
+**🔗 Live Demo Dashboard:** [ai-reliability-engineer.netlify.app](https://ai-reliability-engineer.netlify.app/)
 
 <br>
 
