@@ -27,10 +27,10 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .reliability_scorer import AgentMetrics, calculate_reliability_score, score_multiple_agents
-from .cost_analyzer import TokenUsageRecord, analyze_agent_costs, generate_optimization_suggestions
-from .optimization_calc import simulate_context_reduction, simulate_model_tiering
-from .recommendation_api import format_recommendations_for_api
+from services.reliability_scorer import AgentMetrics, calculate_reliability_score, score_multiple_agents
+from services.cost_analyzer import TokenUsageRecord, analyze_agent_costs, generate_optimization_suggestions
+from services.optimization_calc import simulate_context_reduction, simulate_model_tiering
+from services.recommendation_api import format_recommendations_for_api
 
 app = FastAPI(
     title="AIRE Backend API",
